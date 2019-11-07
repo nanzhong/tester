@@ -27,6 +27,11 @@ type TBRunConfig struct {
 	Timeout time.Duration `json:"timeout"`
 }
 
+type tbRunner struct {
+	config *TBRunConfig
+	cancel context.CancelFunc
+}
+
 type options struct {
 	db *db.MemDB
 }
@@ -43,13 +48,10 @@ func WithDB(db *db.MemDB) Option {
 
 // Runner is the implementation of the test runner.
 type Runner struct {
-	runConfigs []TBRunConfig
-	db         *db.MemDB
-
+	runners []*tbRunner
+	db      *db.MemDB
 	stop    chan struct{}
 	wg      sync.WaitGroup
-	mu      sync.Mutex
-	runCmds []*exec.Cmd
 }
 
 func New(configs []TBRunConfig, opts ...Option) *Runner {
@@ -62,19 +64,25 @@ func New(configs []TBRunConfig, opts ...Option) *Runner {
 	}
 
 	runner := &Runner{
-		db:         defOpts.db,
-		runConfigs: configs,
+		db:   defOpts.db,
+		stop: make(chan struct{}),
+	}
+
+	for _, config := range configs {
+		runner.runners = append(runner.runners, &tbRunner{
+			config: &config,
+		})
 	}
 
 	return runner
 }
 
 func (r *Runner) Run() {
+	log.Printf("runner configured with %d packages\n", len(r.runners))
 	log.Println("starting runner...")
-	log.Printf("runner configured with %d packages\n", len(r.runConfigs))
 
-	for _, config := range r.runConfigs {
-		config := config
+	for _, runner := range r.runners {
+		runner := runner
 		r.wg.Add(1)
 		go func() {
 			for {
@@ -83,7 +91,7 @@ func (r *Runner) Run() {
 					r.wg.Done()
 					return
 				default:
-					r.runTB(config)
+					r.runTB(runner)
 				}
 			}
 		}()
@@ -95,6 +103,9 @@ func (r *Runner) Run() {
 func (r *Runner) Stop(ctx context.Context) error {
 	log.Println("stopping runner...")
 	close(r.stop)
+	for _, runner := range r.runners {
+		runner.cancel()
+	}
 
 	c := make(chan struct{})
 	go func() {
@@ -104,6 +115,7 @@ func (r *Runner) Stop(ctx context.Context) error {
 
 	select {
 	case <-c:
+		log.Println("runner stopped")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("stopping runner: %w", ctx.Err())
@@ -152,8 +164,8 @@ func (b textBytes) Bytes() []byte {
 	return []byte(b)
 }
 
-func (r *Runner) runTB(config TBRunConfig) error {
-	log.Printf("starting test run for %s\n", config.Path)
+func (r *Runner) runTB(runner *tbRunner) error {
+	log.Printf("starting test run for %s\n", runner.config.Path)
 
 	var output bytes.Buffer
 
@@ -161,14 +173,18 @@ func (r *Runner) runTB(config TBRunConfig) error {
 		"tool",
 		"test2json",
 		"-t",
-		config.Path,
+		runner.config.Path,
 		"-test.v",
 	}
-	if config.Timeout != 0 {
-		runArgs = append(runArgs, fmt.Sprintf("-test.timeout=%s", config.Timeout.String()))
+	if runner.config.Timeout != 0 {
+		runArgs = append(runArgs, fmt.Sprintf("-test.timeout=%s", runner.config.Timeout.String()))
 	}
 
-	cmd := exec.Command("go", runArgs...)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runner.cancel = cancel
+
+	cmd := exec.CommandContext(ctx, "go", runArgs...)
 	cmd.Stdout = &output
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
@@ -248,6 +264,5 @@ func (r *Runner) runTB(config TBRunConfig) error {
 			}
 		}
 	}
-	time.Sleep(5 * time.Second)
 	return nil
 }

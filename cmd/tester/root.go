@@ -67,11 +67,18 @@ var (
 					// Give one minute for running requests to complete
 					ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 
+					log.Printf("attempting to stop runner...")
+					err = runner.Stop(ctx)
+					if err != nil {
+						log.Printf("failed to stop runner: %s\n", err)
+					}
+
 					log.Printf("attempting to shutdown http server...")
 					err := httpServer.Shutdown(ctx)
 					if err != nil {
 						log.Printf("failed to shutdown http server: %s\n", err)
 					}
+
 					cancel()
 					close(c)
 				}
