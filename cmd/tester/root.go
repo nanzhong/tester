@@ -37,6 +37,14 @@ var (
 				log.Fatalf("failed to parse config: %s", err)
 			}
 
+			var runConfigs []runner.TBRunConfig
+			for _, c := range cfg.RunConfigs {
+				runConfigs = append(runConfigs, runner.TBRunConfig{
+					Path:    c.Path,
+					Timeout: time.Duration(c.Timeout),
+				})
+			}
+
 			l, err := net.Listen("tcp", viper.GetString("addr"))
 			if err != nil {
 				log.Fatalf("failed to listen on %s\n", viper.GetString("addr"))
@@ -44,7 +52,7 @@ var (
 
 			db := &db.MemDB{}
 
-			runner := runner.New(cfg.RunConfigs, runner.WithDB(db))
+			runner := runner.New(runConfigs, runner.WithDB(db))
 			go runner.Run()
 
 			server := testerhttp.New(testerhttp.WithDB(db))

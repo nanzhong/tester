@@ -9,22 +9,22 @@ clean:
 	rm -rf dist
 	packr2 clean
 
-.PHONY: tester
-tester:
-ifdef ASSETS
-	packr2
-endif
-	mkdir -p dist
-	go build  -o ./dist ./cmd/tester/...
-
 .PHONY: install
 install:
+	packr2
 	go install ./cmd/tester/...
 
-tester-container:
+.PHONY: tester
+tester:
 	packr2
 	GOOS=linux GOARCH=amd64 go build -o ./dist/tester-linux-amd64 ./cmd/tester/...
 	docker build -t $(IMAGE_NAME):$(COMMIT) .
+ifdef LATEST
+	docker tag $(IMAGE_NAME):$(COMMIT) $(IMAGE_NAME):latest
+endif
 ifdef PUSH
 	docker push $(IMAGE_NAME):$(COMMIT)
+ifdef LATEST
+	docker push $(IMAGE_NAME):latest
+endif
 endif
