@@ -1,0 +1,19 @@
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/tests">Tests</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{.Test.Name}} - {{.Test.ID}}</li>
+  </ol>
+</nav>
+
+<div class="row">
+  <div class="col-lg">
+    {{template "test_card" .Test}}
+  </div>
+  <div class="col-lg-8">
+    {{if .Test.OutputString}}
+    <pre><code>{{.Test.OutputString}}</code></pre>
+    {{else}}
+    <p>No logs received yet...</p>
+    {{end}}
+  </div>
+</div>

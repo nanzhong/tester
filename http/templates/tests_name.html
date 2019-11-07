@@ -1,0 +1,21 @@
+{{range $name := .TestNames}}
+{{$tests := index $.TestsByName $name}}
+<div class="row">
+  <div class="col">
+    <h5><a name="{{$name}}" href="#{{$name}}">{{$name}}</a></h5>
+      {{range $tests}}
+      <a href="/tests/{{.ID}}" class="btn btn-{{.State | testStateColour}} btn-sm my-1 test">
+        {{.Duration | formatDuration}}<br><small>({{.StartTime | formatRelativeTime}})</small>
+      </a>
+      {{end}}
+    </div>
+  </div>
+</div>
+{{else}}
+<div class="row">
+  <div class="col">
+    <h5>No test results yet</h5>
+    <p>Kick off a test run and publish the results...</p>
+  </div>
+</div>
+{{end}}
