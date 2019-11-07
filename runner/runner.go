@@ -28,7 +28,7 @@ type TBRunConfig struct {
 }
 
 type tbRunner struct {
-	config *TBRunConfig
+	config TBRunConfig
 	cancel context.CancelFunc
 }
 
@@ -70,7 +70,7 @@ func New(configs []TBRunConfig, opts ...Option) *Runner {
 
 	for _, config := range configs {
 		runner.runners = append(runner.runners, &tbRunner{
-			config: &config,
+			config: config,
 		})
 	}
 
