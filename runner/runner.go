@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
@@ -91,7 +90,7 @@ func (r *Runner) Run() {
 					r.wg.Done()
 					return
 				default:
-					err := r.runTB(runner)
+					err := r.runTB(context.Background(), runner)
 					if err != nil {
 						log.Printf("error running: %s\n", err)
 					}
@@ -125,49 +124,7 @@ func (r *Runner) Stop(ctx context.Context) error {
 	}
 }
 
-type testEvent struct {
-	Time   time.Time  `json:"time"`
-	Action string     `json:"Action"`
-	Test   string     `json:"Test"`
-	Output *textBytes `json:"Output"`
-}
-
-func (e *testEvent) TopLevel() bool {
-	return !strings.Contains(e.Test, "/")
-}
-
-func (e *testEvent) ParentTest() string {
-	parts := strings.Split(e.Test, "/")
-	return strings.Join(parts[:len(parts)-1], "/")
-}
-
-func (e *testEvent) ParentTests() []string {
-	var (
-		parents []string
-		name    string
-	)
-	parts := strings.Split(e.Test, "/")
-	for _, part := range parts {
-		name = name + part
-		parents = append(parents, name)
-		name = name + "/"
-	}
-	return parents
-}
-
-// https://github.com/golang/go/blob/master/src/cmd/internal/test2json/test2json.go#L44
-type textBytes []byte
-
-func (b *textBytes) UnmarshalText(text []byte) error {
-	*b = text
-	return nil
-}
-
-func (b textBytes) Bytes() []byte {
-	return []byte(b)
-}
-
-func (r *Runner) runTB(runner *tbRunner) error {
+func (r *Runner) runTB(ctx context.Context, runner *tbRunner) error {
 	log.Printf("starting test run for %s\n", runner.config.Path)
 
 	var output bytes.Buffer
@@ -183,10 +140,6 @@ func (r *Runner) runTB(runner *tbRunner) error {
 		runArgs = append(runArgs, fmt.Sprintf("-test.timeout=%s", runner.config.Timeout.String()))
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	runner.cancel = cancel
-
 	cmd := exec.CommandContext(ctx, "go", runArgs...)
 	cmd.Stdout = &output
 	cmd.Stderr = os.Stderr
@@ -199,15 +152,43 @@ func (r *Runner) runTB(runner *tbRunner) error {
 		}
 	}
 
-	testResults := make(map[string]*tester.Test)
-	events := bytes.Split(bytes.Trim(output.Bytes(), " \n"), []byte("\n"))
-	for _, eventData := range events {
+	eventBytes := bytes.Split(bytes.Trim(output.Bytes(), " \n"), []byte("\n"))
+	var events []*testEvent
+	for _, eventData := range eventBytes {
 		var event testEvent
 		err := json.Unmarshal(eventData, &event)
 		if err != nil {
 			return fmt.Errorf("parsing test event: %w", err)
 		}
+		events = append(events, &event)
+	}
 
+	tests, _, err := processEvents(events)
+	if err != nil {
+		return fmt.Errorf("processing events: %w", err)
+	}
+
+	for _, test := range tests {
+		r.db.AddTest(test)
+		runLabels := prometheus.Labels{
+			"name":  test.Name,
+			"state": test.State.String(),
+		}
+		RunDurationMetric.With(runLabels).Observe(test.FinishTime.Sub(test.StartTime).Seconds())
+		RunLastMetric.With(runLabels).Set(float64(test.StartTime.Unix()))
+	}
+
+	return nil
+}
+
+func processEvents(events []*testEvent) ([]*tester.Test, []*tester.Benchmark, error) {
+	var (
+		tests      []*tester.Test
+		testMap    = make(map[string]*tester.Test)
+		benchmarks []*tester.Benchmark
+	)
+
+	for _, event := range events {
 		// TODO revisit when adding support for benchmarks
 		if event.Test == "" {
 			continue
@@ -222,19 +203,19 @@ func (r *Runner) runTB(runner *tbRunner) error {
 					StartTime: event.Time,
 				},
 			}
-			testResults[event.Test] = test
+			testMap[event.Test] = test
 
 			if !event.TopLevel() {
-				parentTest, ok := testResults[event.ParentTest()]
+				parentTest, ok := testMap[event.ParentTest()]
 				if !ok {
-					return fmt.Errorf("missing parent test %s for sub test %s", event.ParentTest(), event.Test)
+					return nil, nil, fmt.Errorf("missing parent test %s for sub test %s", event.ParentTest(), event.Test)
 				}
 				parentTest.SubTests = append(parentTest.SubTests, test)
 			}
 		case "pass", "fail", "skipped":
-			test, ok := testResults[event.Test]
+			test, ok := testMap[event.Test]
 			if !ok {
-				return fmt.Errorf("missing test: %s", event.Test)
+				return nil, nil, fmt.Errorf("missing test: %s", event.Test)
 			}
 			test.FinishTime = event.Time
 			switch event.Action {
@@ -247,29 +228,23 @@ func (r *Runner) runTB(runner *tbRunner) error {
 			}
 
 			if event.TopLevel() {
-				r.db.AddTest(test)
-				runLabels := prometheus.Labels{
-					"name":  test.Name,
-					"state": test.State.String(),
-				}
-				RunDurationMetric.With(runLabels).Observe(test.FinishTime.Sub(test.StartTime).Seconds())
-				RunLastMetric.With(runLabels).Set(float64(test.StartTime.Unix()))
+				tests = append(tests, test)
 			}
 		case "output":
-			test, ok := testResults[event.Test]
+			test, ok := testMap[event.Test]
 			if !ok {
-				return fmt.Errorf("missing test: %s", event.Test)
+				return nil, nil, fmt.Errorf("missing test: %s", event.Test)
 			}
 			test.Output = append(test.Output, event.Output.Bytes()...)
 
 			for _, testName := range event.ParentTests() {
-				test, ok := testResults[testName]
+				test, ok := testMap[testName]
 				if !ok {
-					return fmt.Errorf("missing parent test %s for sub test %s", testName, event.Test)
+					return nil, nil, fmt.Errorf("missing parent test %s for sub test %s", testName, event.Test)
 				}
 				test.Output = append(test.Output, event.Output.Bytes()...)
 			}
 		}
 	}
-	return nil
+	return tests, benchmarks, nil
 }
