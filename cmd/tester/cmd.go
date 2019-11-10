@@ -20,8 +20,7 @@ import (
 )
 
 var (
-	// RootCmd is the root command of tester.
-	RootCmd = &cobra.Command{
+	cmd = &cobra.Command{
 		Use:   "tester",
 		Short: "tester is a go test runner",
 		Long:  "tester is a go test runner that also presents a web UI for inspecting results and prometheus mettrics for test run statistics",
@@ -100,9 +99,9 @@ var (
 )
 
 func init() {
-	RootCmd.Flags().String("addr", "0.0.0.0:8080", "The address to serve on")
-	viper.BindPFlag("addr", RootCmd.Flags().Lookup("addr"))
-	RootCmd.Flags().String("config", "", "The path to the run config file")
-	RootCmd.MarkFlagRequired("config")
-	viper.BindPFlag("config", RootCmd.Flags().Lookup("config"))
+	cmd.Flags().String("addr", "0.0.0.0:8080", "The address to serve on")
+	viper.BindPFlag("addr", cmd.Flags().Lookup("addr"))
+	cmd.Flags().String("config", "", "The path to the run config file")
+	cmd.MarkFlagRequired("config")
+	viper.BindPFlag("config", cmd.Flags().Lookup("config"))
 }

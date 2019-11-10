@@ -91,7 +91,10 @@ func (r *Runner) Run() {
 					r.wg.Done()
 					return
 				default:
-					r.runTB(runner)
+					err := r.runTB(runner)
+					if err != nil {
+						log.Printf("error running: %s\n", err)
+					}
 				}
 			}
 		}()
@@ -189,7 +192,11 @@ func (r *Runner) runTB(runner *tbRunner) error {
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("running test/benchmark: %w", err)
+		// non 0 exit statuses are okay.
+		// eg. failed tests will result in exit status 1.
+		if _, ok := err.(*exec.ExitError); !ok {
+			return fmt.Errorf("running test/benchmark: %w", err)
+		}
 	}
 
 	testResults := make(map[string]*tester.Test)

@@ -13,7 +13,7 @@ func init() {
 }
 
 func main() {
-	if err := RootCmd.Execute(); err != nil {
+	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
