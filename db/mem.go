@@ -24,7 +24,7 @@ func (m *MemDB) AddTest(test *tester.Test) {
 	m.Tests = append([]*tester.Test{test}, m.Tests...)
 
 	if len(m.Tests) > maxInMemResults {
-		m.Tests = m.Tests[:100]
+		m.Tests = m.Tests[:maxInMemResults]
 	}
 }
 

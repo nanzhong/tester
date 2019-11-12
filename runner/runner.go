@@ -6,16 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/nanzhong/tester"
-	"github.com/nanzhong/tester/db"
-	"github.com/prometheus/client_golang/prometheus"
 )
+
+var resultSubmissionTimeout = 15 * time.Second
 
 // TBRunConfig is the configuration for a test/benchmark that the Runner should
 // schedule.
@@ -34,112 +34,92 @@ type tbRunner struct {
 }
 
 type options struct {
-	db *db.MemDB
+	testerAddr string
 }
 
 // Option is used to inject dependencies into a Server on creation.
 type Option func(*options)
 
-// WithDB allows configuring a TESTER.
-func WithDB(db *db.MemDB) Option {
+// WithTesterAddr allows configuring result submission to a tester server.
+func WithTesterAddr(addr string) Option {
 	return func(opts *options) {
-		opts.db = db
+		opts.testerAddr = addr
 	}
 }
 
 // Runner is the implementation of the test runner.
 type Runner struct {
-	runners []*tbRunner
-	db      *db.MemDB
-	stop    chan struct{}
-	wg      sync.WaitGroup
+	testerAddr string
+	config     TBRunConfig
+
+	stop     chan struct{}
+	finished chan struct{}
+	kill     context.CancelFunc
 }
 
-func New(configs []TBRunConfig, opts ...Option) *Runner {
-	defOpts := &options{
-		db: &db.MemDB{},
-	}
+func New(config TBRunConfig, opts ...Option) *Runner {
+	defOpts := &options{}
 
 	for _, opt := range opts {
 		opt(defOpts)
 	}
 
-	runner := &Runner{
-		db:   defOpts.db,
-		stop: make(chan struct{}),
-	}
+	return &Runner{
+		config:     config,
+		testerAddr: defOpts.testerAddr,
 
-	for _, config := range configs {
-		runner.runners = append(runner.runners, &tbRunner{
-			config: config,
-		})
+		stop:     make(chan struct{}),
+		finished: make(chan struct{}),
 	}
-
-	return runner
 }
 
 func (r *Runner) Run() {
-	log.Printf("runner configured with %d packages\n", len(r.runners))
 	log.Println("starting runner...")
+	ctx, cancel := context.WithCancel(context.Background())
+	r.kill = cancel
 
-	for _, runner := range r.runners {
-		runner := runner
-		r.wg.Add(1)
-		go func() {
-			for {
-				select {
-				case <-r.stop:
-					r.wg.Done()
-					return
-				default:
-					err := r.runTB(context.Background(), runner)
-					if err != nil {
-						log.Printf("error running: %s\n", err)
-					}
-				}
+	for {
+		select {
+		case <-r.stop:
+			return
+		default:
+			err := r.runOnce(ctx)
+			if err != nil {
+				log.Printf("error running: %s\n", err)
 			}
-		}()
+		}
 	}
-	r.wg.Wait()
+	close(r.finished)
 	log.Println("runner finished")
 }
 
 func (r *Runner) Stop(ctx context.Context) error {
 	log.Println("stopping runner...")
 	close(r.stop)
-	for _, runner := range r.runners {
-		runner.cancel()
-	}
-
-	c := make(chan struct{})
-	go func() {
-		r.wg.Wait()
-		close(c)
-	}()
 
 	select {
-	case <-c:
+	case <-r.finished:
 		log.Println("runner stopped")
-		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("stopping runner: %w", ctx.Err())
+		log.Println("failed to stop runner gracefully, killing")
+		r.kill()
 	}
+	return nil
 }
 
-func (r *Runner) runTB(ctx context.Context, runner *tbRunner) error {
-	log.Printf("starting test run for %s\n", runner.config.Path)
+func (r *Runner) runOnce(ctx context.Context) error {
+	log.Printf("starting run for %s\n", r.config.Path)
 
 	var output bytes.Buffer
-
 	runArgs := []string{
 		"tool",
 		"test2json",
 		"-t",
-		runner.config.Path,
+		r.config.Path,
 		"-test.v",
 	}
-	if runner.config.Timeout != 0 {
-		runArgs = append(runArgs, fmt.Sprintf("-test.timeout=%s", runner.config.Timeout.String()))
+	if r.config.Timeout != 0 {
+		runArgs = append(runArgs, fmt.Sprintf("-test.timeout=%s", r.config.Timeout.String()))
 	}
 
 	cmd := exec.CommandContext(ctx, "go", runArgs...)
@@ -170,16 +150,46 @@ func (r *Runner) runTB(ctx context.Context, runner *tbRunner) error {
 		return fmt.Errorf("processing events: %w", err)
 	}
 
+	log.Printf("finished run for %s\n", r.config.Path)
 	for _, test := range tests {
-		r.db.AddTest(test)
-		runLabels := prometheus.Labels{
-			"name":  test.Name,
-			"state": test.State.String(),
+		log.Printf("Test: %s - %s - %s\n", test.Name, test.State.String(), test.Duration().String())
+		if r.testerAddr != "" {
+			err := r.submitTestResult(test)
+			if err != nil {
+				log.Printf("failed to submit result: %s\n", err)
+			}
+
 		}
-		RunDurationMetric.With(runLabels).Observe(test.FinishTime.Sub(test.StartTime).Seconds())
-		RunLastMetric.With(runLabels).Set(float64(test.StartTime.Unix()))
+	}
+	return nil
+}
+
+func (r *Runner) submitTestResult(test *tester.Test) error {
+	jsonTest, err := json.Marshal(test)
+	if err != nil {
+		return fmt.Errorf("marshaling json test: %w", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), resultSubmissionTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		fmt.Sprintf("%s/api/tests", r.testerAddr),
+		bytes.NewBuffer(jsonTest),
+	)
+	if err != nil {
+		return fmt.Errorf("constructing request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("submitting test: %w", err)
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("received unexpected status code: %d", resp.StatusCode)
+	}
 	return nil
 }
 

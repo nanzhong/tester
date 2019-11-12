@@ -25,18 +25,8 @@ type options struct {
 	db *db.MemDB
 }
 
-// Option is used to inject dependencies into a Server on creation.
-type Option func(*options)
-
-// WithDB allows configuring a DB.
-func WithDB(db *db.MemDB) Option {
-	return func(opts *options) {
-		opts.db = db
-	}
-}
-
-// New constructs a new `Server`.
-func New(opts ...Option) *UIHandler {
+// NewUIHandler constructs a new `UIHandler`.
+func NewUIHandler(opts ...Option) *UIHandler {
 	defOpts := &options{
 		db: &db.MemDB{},
 	}
@@ -45,25 +35,25 @@ func New(opts ...Option) *UIHandler {
 		opt(defOpts)
 	}
 
-	server := &UIHandler{
+	handler := &UIHandler{
 		db:            defOpts.db,
 		templateFiles: packr.New("templates", "./templates"),
 	}
 
 	r := mux.NewRouter()
-	r.HandleFunc("/", LogHandlerFunc(server.listTests)).Methods(http.MethodGet)
-	r.HandleFunc("/tests", LogHandlerFunc(server.listTests)).Methods(http.MethodGet)
-	r.HandleFunc("/tests/{test_id}", LogHandlerFunc(server.getTest)).Methods(http.MethodGet)
-	server.Handler = r
+	r.HandleFunc("/", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
+	r.HandleFunc("/tests", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
+	r.HandleFunc("/tests/{test_id}", LogHandlerFunc(handler.getTest)).Methods(http.MethodGet)
+	handler.Handler = r
 
-	return server
+	return handler
 }
 
-func (s *UIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.Handler.ServeHTTP(w, r)
+func (h *UIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.Handler.ServeHTTP(w, r)
 }
 
-func (s *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
+func (h *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
 	var template string
 	switch view := r.URL.Query().Get("view"); view {
 	case "recent", "name":
@@ -72,7 +62,7 @@ func (s *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
 		template = "tests"
 	}
 
-	tests := s.db.ListTests()
+	tests := h.db.ListTests()
 	value := &struct {
 		Tests       []*tester.Test
 		TestNames   []string
@@ -91,17 +81,17 @@ func (s *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(value.TestNames)
 
-	s.render(w, r, template, value)
+	h.render(w, r, template, value)
 }
 
-func (s *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
+func (h *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	test, err := s.db.GetTest(vars["test_id"])
+	test, err := h.db.GetTest(vars["test_id"])
 	if err != nil {
 		if err == db.ErrNotFound {
-			s.renderError(w, r, err, http.StatusNotFound)
+			h.renderError(w, r, err, http.StatusNotFound)
 		} else {
-			s.renderError(w, r, err, http.StatusInternalServerError)
+			h.renderError(w, r, err, http.StatusInternalServerError)
 		}
 		return
 	}
@@ -112,13 +102,13 @@ func (s *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
 		Test: test,
 	}
 
-	s.render(w, r, "test_details", value)
+	h.render(w, r, "test_details", value)
 }
 
-func (s *UIHandler) render(w http.ResponseWriter, r *http.Request, name string, value interface{}) {
+func (h *UIHandler) render(w http.ResponseWriter, r *http.Request, name string, value interface{}) {
 	var b bytes.Buffer
-	if err := s.ExecuteTemplate(name, &b, value); err != nil {
-		s.renderError(w, r, err, http.StatusInternalServerError)
+	if err := h.ExecuteTemplate(name, &b, value); err != nil {
+		h.renderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -127,7 +117,7 @@ func (s *UIHandler) render(w http.ResponseWriter, r *http.Request, name string, 
 	b.WriteTo(w)
 }
 
-func (s *UIHandler) renderError(w http.ResponseWriter, r *http.Request, err error, status int) {
+func (h *UIHandler) renderError(w http.ResponseWriter, r *http.Request, err error, status int) {
 	value := struct {
 		Status int
 		Error  error
@@ -137,7 +127,7 @@ func (s *UIHandler) renderError(w http.ResponseWriter, r *http.Request, err erro
 	}
 
 	var b bytes.Buffer
-	if err := s.ExecuteTemplate("error", &b, value); err != nil {
+	if err := h.ExecuteTemplate("error", &b, value); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "%+v", err)
 		return
