@@ -38,10 +38,11 @@ var (
 
 			var runConfigs []runner.TBRunConfig
 			for _, c := range cfg.RunConfigs {
-				runConfigs = append(runConfigs, runner.TBRunConfig{
+				runConfig := runner.TBRunConfig{
 					Path:    c.Path,
 					Timeout: time.Duration(c.Timeout),
-				})
+				}
+				runConfigs = append(runConfigs, runConfig)
 			}
 
 			l, err := net.Listen("tcp", viper.GetString("addr"))

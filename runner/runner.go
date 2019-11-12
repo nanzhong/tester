@@ -21,9 +21,11 @@ import (
 // schedule.
 type TBRunConfig struct {
 	// Path to the test binary.
-	Path string `json:"path"`
+	Path string
 	// Timeout to configure for the test.
-	Timeout time.Duration `json:"timeout"`
+	Timeout time.Duration
+	// Arguments are additional arguments to pass to the test binary.
+	Arguments []string
 }
 
 type tbRunner struct {
