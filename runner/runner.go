@@ -212,7 +212,7 @@ func processEvents(events []*testEvent) ([]*tester.Test, []*tester.Benchmark, er
 				}
 				parentTest.SubTests = append(parentTest.SubTests, test)
 			}
-		case "pass", "fail", "skipped":
+		case "pass", "fail", "skip":
 			test, ok := testMap[event.Test]
 			if !ok {
 				return nil, nil, fmt.Errorf("missing test: %s", event.Test)
