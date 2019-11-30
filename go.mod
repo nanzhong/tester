@@ -14,7 +14,8 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.4.0
-	golang.org/x/crypto v0.0.0-20191106202628-ed6320f186d4 // indirect
-	golang.org/x/sys v0.0.0-20191105231009-c1f44814a5cd // indirect
-	golang.org/x/tools v0.0.0-20191107010934-f79515f33823 // indirect
+	golang.org/x/crypto v0.0.0-20191112222119-e1110fd1c708 // indirect
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/sys v0.0.0-20191112214154-59a1497f0cea // indirect
+	golang.org/x/tools v0.0.0-20191112222651-c81e7ae886d1 // indirect
 )

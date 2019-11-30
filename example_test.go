@@ -83,6 +83,8 @@ func BenchmarkExample_parallel(b *testing.B) {
 	}
 }
 
+func Simple() {}
+
 func ExampleSimple() {
 	fmt.Println("simple")
 	// Output: simple

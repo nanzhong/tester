@@ -1,0 +1,4 @@
+dist/*
+cmd/tester/tester
+http/http-packr.go
+packrd

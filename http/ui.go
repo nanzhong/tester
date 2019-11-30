@@ -18,11 +18,11 @@ type UIHandler struct {
 
 	templateFiles *packr.Box
 
-	db *db.MemDB
+	db db.DB
 }
 
 type options struct {
-	db *db.MemDB
+	db db.DB
 }
 
 // NewUIHandler constructs a new `UIHandler`.
@@ -62,7 +62,12 @@ func (h *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
 		template = "tests"
 	}
 
-	tests := h.db.ListTests()
+	tests, err := h.db.ListTests(r.Context())
+	if err != nil {
+		h.renderError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
 	value := &struct {
 		Tests       []*tester.Test
 		TestNames   []string
@@ -86,7 +91,7 @@ func (h *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
 
 func (h *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	test, err := h.db.GetTest(vars["test_id"])
+	test, err := h.db.GetTest(r.Context(), vars["test_id"])
 	if err != nil {
 		if err == db.ErrNotFound {
 			h.renderError(w, r, err, http.StatusNotFound)
