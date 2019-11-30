@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -40,7 +41,7 @@ type options struct {
 // Option is used to inject dependencies into a Server on creation.
 type Option func(*options)
 
-// WithTesterAddr allows configuring result submission to a tester server.
+// WithTesterAddr allows configuring a custom address for the tester server.
 func WithTesterAddr(addr string) Option {
 	return func(opts *options) {
 		opts.testerAddr = addr
@@ -50,23 +51,25 @@ func WithTesterAddr(addr string) Option {
 // Runner is the implementation of the test runner.
 type Runner struct {
 	testerAddr string
-	config     TBRunConfig
+	packages   []tester.Package
 
 	stop     chan struct{}
 	finished chan struct{}
 	kill     context.CancelFunc
 }
 
-func New(config TBRunConfig, opts ...Option) *Runner {
-	defOpts := &options{}
+func New(packages []tester.Package, opts ...Option) *Runner {
+	defOpts := &options{
+		testerAddr: "0.0.0.0:8080",
+	}
 
 	for _, opt := range opts {
 		opt(defOpts)
 	}
 
 	return &Runner{
-		config:     config,
 		testerAddr: defOpts.testerAddr,
+		packages:   packages,
 
 		stop:     make(chan struct{}),
 		finished: make(chan struct{}),
@@ -74,58 +77,105 @@ func New(config TBRunConfig, opts ...Option) *Runner {
 }
 
 func (r *Runner) Run() {
-	log.Println("starting runner...")
-	ctx, cancel := context.WithCancel(context.Background())
-	r.kill = cancel
-
+	wait := 0 * time.Second
 	for {
 		select {
 		case <-r.stop:
+			close(r.finished)
 			return
-		default:
-			err := r.runOnce(ctx)
-			if err != nil {
-				log.Printf("error running: %s\n", err)
-			}
+		case <-time.After(wait):
+		}
+		wait = time.Duration((rand.Int() % 10)) * time.Second
+		ctx, cancel := context.WithCancel(context.Background())
+		r.kill = cancel
+
+		err := r.runOnce(ctx)
+		if err != nil {
+			log.Printf("error running: %s\n", err)
 		}
 	}
-	close(r.finished)
-	log.Println("runner finished")
 }
 
-func (r *Runner) Stop(ctx context.Context) error {
-	log.Println("stopping runner...")
+func (r *Runner) Stop(ctx context.Context) {
 	close(r.stop)
 
 	select {
 	case <-r.finished:
-		log.Println("runner stopped")
 	case <-ctx.Done():
-		log.Println("failed to stop runner gracefully, killing")
 		r.kill()
 	}
-	return nil
+}
+
+func (r *Runner) claimRun(ctx context.Context) (*tester.Run, error) {
+	var packages []string
+	for _, pkg := range r.packages {
+		packages = append(packages, pkg.Name)
+	}
+	body, err := json.Marshal(packages)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling claim request to json: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		fmt.Sprintf("%s/api/runs/claim", r.testerAddr),
+		bytes.NewBuffer(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("constructing claim request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("claiming run: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var run tester.Run
+		err = json.NewDecoder(resp.Body).Decode(&run)
+		if err != nil {
+			return nil, fmt.Errorf("decoding claimed run: %w", err)
+		}
+		return &run, nil
+	case http.StatusNotFound:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("received unexpected status code for claim request: %d", resp.StatusCode)
+	}
 }
 
 func (r *Runner) runOnce(ctx context.Context) error {
-	log.Printf("starting run for %s\n", r.config.Path)
+	run, err := r.claimRun(ctx)
+	if err != nil {
+		return fmt.Errorf("claiming run: %w", err)
+	}
+	if run == nil {
+		return nil
+	}
 
+	log.Printf("starting run for %s (%s)", run.Package.Name, run.ID)
 	var output bytes.Buffer
 	runArgs := []string{
 		"tool",
 		"test2json",
 		"-t",
-		r.config.Path,
+		run.Package.Path,
 		"-test.v",
 	}
-	if r.config.Timeout != 0 {
-		runArgs = append(runArgs, fmt.Sprintf("-test.timeout=%s", r.config.Timeout.String()))
+
+	timeout := time.Duration(run.Package.DefaultTimeout)
+	if timeout != 0 {
+		runArgs = append(runArgs, fmt.Sprintf("-test.timeout=%s", timeout.String()))
 	}
 
 	cmd := exec.CommandContext(ctx, "go", runArgs...)
 	cmd.Stdout = &output
 	cmd.Stderr = os.Stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		// non 0 exit statuses are okay.
 		// eg. failed tests will result in exit status 1.
@@ -150,11 +200,11 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		return fmt.Errorf("processing events: %w", err)
 	}
 
-	log.Printf("finished run for %s\n", r.config.Path)
+	log.Printf("finished run for %s\n", run.Package.Name)
 	for _, test := range tests {
 		log.Printf("Test: %s - %s - %s\n", test.Name, test.State.String(), test.Duration().String())
 		if r.testerAddr != "" {
-			err := r.submitTestResult(test)
+			err := r.submitTestResult(test, run.ID)
 			if err != nil {
 				log.Printf("failed to submit result: %s\n", err)
 			}
@@ -164,8 +214,13 @@ func (r *Runner) runOnce(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) submitTestResult(test *tester.Test) error {
-	jsonTest, err := json.Marshal(test)
+func (r *Runner) submitTestResult(test *tester.Test, runID string) error {
+	type testWithRun struct {
+		*tester.Test
+		RunID string `json:"run_id"`
+	}
+
+	jsonTest, err := json.Marshal(testWithRun{Test: test, RunID: runID})
 	if err != nil {
 		return fmt.Errorf("marshaling json test: %w", err)
 	}

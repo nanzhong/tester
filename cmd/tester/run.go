@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
 	"os/signal"
@@ -16,38 +17,37 @@ import (
 var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "start a test runner",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		var opts []runner.Option
-		if viper.GetString("tester-addr") != "" {
-			opts = append(opts, runner.WithTesterAddr(viper.GetString("tester-addr")))
+		file, err := os.Open(viper.GetString("run-packages-config"))
+		if err != nil {
+			if os.IsNotExist(err) {
+				log.Fatalf("packages-config (%s) does not exist", viper.GetString("run-packages-config"))
+			}
+			log.Fatalf("failed to read packages-config (%s): %s", viper.GetString("run-packages-config"), err)
+		}
+		var cfg config
+		err = json.NewDecoder(file).Decode(&cfg)
+		if err != nil {
+			log.Fatalf("failed to read package-config (%s): %s", viper.GetString("run-packages-config"), err)
 		}
 
-		config := runner.TBRunConfig{
-			Path:    args[0],
-			Timeout: viper.GetDuration("timeout"),
-		}
-
-		runner := runner.New(config, opts...)
+		runner := runner.New(cfg.Packages, runner.WithTesterAddr(viper.GetString("run-tester-addr")))
 
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		go func() {
+			defer close(c)
 			<-c
 			log.Println("shutting down")
 
 			{
 				// Give one minute for running requests to complete
 				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+				defer cancel()
 
 				log.Printf("attempting to stop runner...")
-				err := runner.Stop(ctx)
-				if err != nil {
-					log.Printf("failed to stop runner: %s", err)
-				}
-
-				cancel()
-				close(c)
+				runner.Stop(ctx)
 			}
 		}()
 
@@ -58,8 +58,10 @@ var runCmd = &cobra.Command{
 }
 
 func init() {
-	runCmd.Flags().String("tester-addr", "", "The address where the tester server is listening on")
-	viper.BindPFlag("tester-addr", runCmd.Flags().Lookup("tester-addr"))
-	runCmd.Flags().Duration("timeout", 10*time.Minute, "The timeout for running the tests")
-	viper.BindPFlag("timeout", runCmd.Flags().Lookup("timeout"))
+	runCmd.Flags().String("packages-config", "", "Path to the packages configuration file")
+	runCmd.MarkFlagRequired("packages-config")
+	viper.BindPFlag("run-packages-config", runCmd.Flags().Lookup("packages-config"))
+
+	runCmd.Flags().String("tester-addr", "http://0.0.0.0:8080", "The address where the tester server is listening on")
+	viper.BindPFlag("run-tester-addr", runCmd.Flags().Lookup("tester-addr"))
 }

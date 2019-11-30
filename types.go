@@ -1,6 +1,10 @@
 package tester
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 // TBState represents the completion state of a `testing.TB`.
 type TBState int
@@ -58,4 +62,40 @@ type Benchmark struct {
 	TBCommon
 
 	SubBenchmarks []*Benchmark `json:"sub_benchmarks,omitempty"`
+}
+
+// Run is the representation of a pending test or benchmark that has not
+// completed.
+type Run struct {
+	ID         string    `json:"id"`
+	Package    Package   `json:"package"`
+	Args       []string  `json:"args"`
+	EnqueuedAt time.Time `json:"enqueued_at"`
+	StartedAt  time.Time `json:"started_at"`
+}
+
+// Package represents a go package that can be tested or benchmarked.
+type Package struct {
+	Name           string         `json:"name"`
+	Path           string         `json:"path"`
+	DefaultTimeout StringDuration `json:"default_timeout"`
+}
+
+// StringDuration is used to serialize time.Duration.
+type StringDuration time.Duration
+
+// UnmarshalJSON deserializes a StringDuration.
+func (d *StringDuration) UnmarshalJSON(b []byte) error {
+	duration, err := time.ParseDuration(strings.Trim(string(b), `"`))
+	if err != nil {
+		return err
+	}
+	sd := StringDuration(duration)
+	*d = sd
+	return nil
+}
+
+// MarshalJSON serializes a StringDuration.
+func (d *StringDuration) MarshalJSON() (b []byte, err error) {
+	return []byte(fmt.Sprintf(`"%s"`, time.Duration(*d).String())), nil
 }
