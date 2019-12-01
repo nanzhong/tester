@@ -1,4 +1,4 @@
-package tester
+package example
 
 import (
 	"fmt"

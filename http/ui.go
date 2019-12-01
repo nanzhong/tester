@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 
@@ -44,6 +45,7 @@ func NewUIHandler(opts ...Option) *UIHandler {
 	r.HandleFunc("/", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
 	r.HandleFunc("/tests", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
 	r.HandleFunc("/tests/{test_id}", LogHandlerFunc(handler.getTest)).Methods(http.MethodGet)
+	r.HandleFunc("/runs", LogHandlerFunc(handler.listRuns)).Methods(http.MethodGet)
 	handler.Handler = r
 
 	return handler
@@ -108,6 +110,23 @@ func (h *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, r, "test_details", value)
+}
+
+func (h *UIHandler) listRuns(w http.ResponseWriter, r *http.Request) {
+	runs, err := h.db.ListRuns(r.Context())
+	if err != nil {
+		log.Printf("failed to list runs: %s", err)
+		h.renderError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	value := &struct {
+		Runs []*tester.Run
+	}{
+		Runs: runs,
+	}
+
+	h.render(w, r, "runs", value)
 }
 
 func (h *UIHandler) render(w http.ResponseWriter, r *http.Request, name string, value interface{}) {

@@ -1,0 +1,9 @@
+{
+  "packages": [
+    {
+      "name": "example",
+      "path": "./example.test",
+      "default_timeout": "1s"
+    }
+  ]
+}
