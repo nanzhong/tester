@@ -12,16 +12,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// TestPackage describes a test package that can be used for scheduling runs.
-type TestPackage struct {
-	// Path is the file path to the test binary.
-	Path string
-	// Timeout is the timeout to use for running running tests for this package.
-	Timeout time.Duration
-}
-
 type options struct {
-	db db.DB
+	db       db.DB
+	runDelay time.Duration
 }
 
 // Option is used to inject dependencies into a Scheduler on creation.
@@ -34,25 +27,38 @@ func WithDB(db db.DB) Option {
 	}
 }
 
+// With RunDelay allows configuring a minimum delay between runs of a package.
+func WithRunDelay(d time.Duration) Option {
+	return func(opts *options) {
+		opts.runDelay = d
+	}
+}
+
 // Scheduler schedules runs.
 type Scheduler struct {
-	stop     chan struct{}
-	packages []tester.Package
-	db       db.DB
+	stop            chan struct{}
+	packages        []tester.Package
+	lastScheduledAt map[string]time.Time
+	runDelay        time.Duration
+	db              db.DB
 }
 
 // NewScheduler constructs a new scheduler.
 func NewScheduler(packages []tester.Package, opts ...Option) *Scheduler {
-	defOpts := &options{}
+	defOpts := &options{
+		runDelay: 5 * time.Minute,
+	}
 
 	for _, opt := range opts {
 		opt(defOpts)
 	}
 
 	return &Scheduler{
-		stop:     make(chan struct{}),
-		db:       defOpts.db,
-		packages: packages,
+		stop:            make(chan struct{}),
+		db:              defOpts.db,
+		runDelay:        defOpts.runDelay,
+		lastScheduledAt: make(map[string]time.Time),
+		packages:        packages,
 	}
 }
 
@@ -106,11 +112,17 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 
 	for _, pkg := range packagesToRun {
 		if _, exists := pendingRuns[pkg.Name]; !exists {
+			last, ran := s.lastScheduledAt[pkg.Name]
+			if ran && time.Now().Sub(last) < s.runDelay {
+				continue
+			}
+
 			err = s.db.EnqueueRun(ctx, &tester.Run{
 				ID:         uuid.New().String(),
 				Package:    pkg,
 				EnqueuedAt: time.Now(),
 			})
+			s.lastScheduledAt[pkg.Name] = time.Now()
 			log.Printf("scheduled run %s", pkg.Name)
 		}
 	}
