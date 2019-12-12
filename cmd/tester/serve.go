@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/go-redis/redis/v7"
 	"github.com/nanzhong/tester/db"
 	testerhttp "github.com/nanzhong/tester/http"
 	"github.com/nanzhong/tester/scheduler"
@@ -27,17 +29,18 @@ var serveCmd = &cobra.Command{
 	Short: "sere the web UI",
 	Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		file, err := os.Open(viper.GetString("serve-packages-config"))
+		configPath := viper.GetString("serve-config")
+		file, err := os.Open(configPath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				log.Fatalf("packages-config (%s) does not exist", viper.GetString("serve-packages-config"))
+				log.Fatalf("config (%s) does not exist", configPath)
 			}
-			log.Fatalf("failed to read packages-config (%s): %s", viper.GetString("serve-packages-config"), err)
+			log.Fatalf("failed to read config (%s): %s", configPath, err)
 		}
 		var cfg config
 		err = json.NewDecoder(file).Decode(&cfg)
 		if err != nil {
-			log.Fatalf("failed to read package-config (%s): %s", viper.GetString("serve-packages-config"), err)
+			log.Fatalf("failed to parse config (%s): %s", configPath, err)
 		}
 
 		l, err := net.Listen("tcp", viper.GetString("serve-addr"))
@@ -46,25 +49,17 @@ var serveCmd = &cobra.Command{
 		}
 
 		var dbStore db.DB
-
-		s3Key := viper.GetString("serve-s3-key")
-		s3Secret := viper.GetString("serve-s3-secret")
-		s3Endpoint := viper.GetString("serve-s3-endpoint")
-		s3Region := viper.GetString("serve-s3-region")
-		s3Bucket := viper.GetString("serve-s3-bucket")
-		if s3Key != "" &&
-			s3Secret != "" &&
-			s3Endpoint != "" &&
-			s3Region != "" &&
-			s3Bucket != "" {
-			log.Println("configuring s3 for persistence")
-			s3Config := &aws.Config{
-				Credentials: credentials.NewStaticCredentials(s3Key, s3Secret, ""),
-				Endpoint:    &s3Endpoint,
-				Region:      &s3Region,
+		if viper.GetString("serve-redis-url") != "" {
+			log.Printf("configuring redis backend")
+			dbStore, err = configureRedis()
+			if err != nil {
+				log.Fatal("failed to configure redis: %w", err)
 			}
-			dbStore = db.NewS3(s3Config, s3Bucket)
+		} else if viper.GetString("serve-s3-endpoint") != "" {
+			log.Printf("configuring s3 backend")
+			dbStore = configureS3()
 		} else {
+			log.Printf("configuring memory backend")
 			dbStore = &db.MemDB{}
 		}
 
@@ -140,11 +135,14 @@ var serveCmd = &cobra.Command{
 }
 
 func init() {
-	serveCmd.Flags().String("packages-config", "", "Path to the packages configuration file")
-	viper.BindPFlag("serve-packages-config", serveCmd.Flags().Lookup("packages-config"))
+	serveCmd.Flags().String("config", "", "Path to the configuration file")
+	viper.BindPFlag("serve-config", serveCmd.Flags().Lookup("config"))
 
 	serveCmd.Flags().String("addr", "0.0.0.0:8080", "The address to serve on")
 	viper.BindPFlag("serve-addr", serveCmd.Flags().Lookup("addr"))
+
+	serveCmd.Flags().String("redis-url", "", "The url string of redis")
+	viper.BindPFlag("serve-redis-url", serveCmd.Flags().Lookup("redis-url"))
 
 	serveCmd.Flags().String("s3-bucket", "", "The name of the s3 compatible bucket")
 	viper.BindPFlag("serve-s3-bucket", serveCmd.Flags().Lookup("s3-bucket"))
@@ -156,4 +154,36 @@ func init() {
 	viper.BindPFlag("serve-s3-key", serveCmd.Flags().Lookup("s3-key"))
 	serveCmd.Flags().String("s3-secret", "", "The s3 secret access key")
 	viper.BindPFlag("serve-s3-secret", serveCmd.Flags().Lookup("s3-secret"))
+}
+
+func configureRedis() (db.DB, error) {
+	redisURL := viper.GetString("serve-redis-url")
+
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, err
+	}
+
+	redisClient := redis.NewClient(opt)
+
+	_, err = redisClient.Ping().Result()
+	if err != nil {
+		return nil, fmt.Errorf("verifying redis connectivity: %w", err)
+	}
+	return db.NewRedis(redisClient), nil
+}
+
+func configureS3() db.DB {
+	s3Key := viper.GetString("serve-s3-key")
+	s3Secret := viper.GetString("serve-s3-secret")
+	s3Endpoint := viper.GetString("serve-s3-endpoint")
+	s3Region := viper.GetString("serve-s3-region")
+	s3Bucket := viper.GetString("serve-s3-bucket")
+
+	s3Config := &aws.Config{
+		Credentials: credentials.NewStaticCredentials(s3Key, s3Secret, ""),
+		Endpoint:    &s3Endpoint,
+		Region:      &s3Region,
+	}
+	return db.NewS3(s3Config, s3Bucket)
 }

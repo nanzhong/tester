@@ -19,17 +19,18 @@ var runCmd = &cobra.Command{
 	Short: "start a test runner",
 	Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		file, err := os.Open(viper.GetString("run-packages-config"))
+		configPath := viper.GetString("run-config")
+		file, err := os.Open(configPath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				log.Fatalf("packages-config (%s) does not exist", viper.GetString("run-packages-config"))
+				log.Fatalf("config (%s) does not exist", configPath)
 			}
-			log.Fatalf("failed to read packages-config (%s): %s", viper.GetString("run-packages-config"), err)
+			log.Fatalf("failed to read config (%s): %s", configPath, err)
 		}
 		var cfg config
 		err = json.NewDecoder(file).Decode(&cfg)
 		if err != nil {
-			log.Fatalf("failed to read package-config (%s): %s", viper.GetString("run-packages-config"), err)
+			log.Fatalf("failed to parse config (%s): %s", configPath, err)
 		}
 
 		runner := runner.New(cfg.Packages, runner.WithTesterAddr(viper.GetString("run-tester-addr")))
@@ -58,8 +59,8 @@ var runCmd = &cobra.Command{
 }
 
 func init() {
-	runCmd.Flags().String("packages-config", "", "Path to the packages configuration file")
-	viper.BindPFlag("run-packages-config", runCmd.Flags().Lookup("packages-config"))
+	runCmd.Flags().String("config", "", "Path to the configuration file")
+	viper.BindPFlag("run-config", runCmd.Flags().Lookup("config"))
 
 	runCmd.Flags().String("tester-addr", "http://0.0.0.0:8080", "The address where the tester server is listening on")
 	viper.BindPFlag("run-tester-addr", runCmd.Flags().Lookup("tester-addr"))
