@@ -141,7 +141,6 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	serveCmd.Flags().String("packages-config", "", "Path to the packages configuration file")
-	serveCmd.MarkFlagRequired("packages-config")
 	viper.BindPFlag("serve-packages-config", serveCmd.Flags().Lookup("packages-config"))
 
 	serveCmd.Flags().String("addr", "0.0.0.0:8080", "The address to serve on")

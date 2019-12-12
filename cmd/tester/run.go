@@ -59,7 +59,6 @@ var runCmd = &cobra.Command{
 
 func init() {
 	runCmd.Flags().String("packages-config", "", "Path to the packages configuration file")
-	runCmd.MarkFlagRequired("packages-config")
 	viper.BindPFlag("run-packages-config", runCmd.Flags().Lookup("packages-config"))
 
 	runCmd.Flags().String("tester-addr", "http://0.0.0.0:8080", "The address where the tester server is listening on")
