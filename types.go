@@ -1,8 +1,6 @@
 package tester
 
 import (
-	"fmt"
-	"strings"
 	"time"
 )
 
@@ -76,26 +74,7 @@ type Run struct {
 
 // Package represents a go package that can be tested or benchmarked.
 type Package struct {
-	Name           string         `json:"name"`
-	Path           string         `json:"path"`
-	DefaultTimeout StringDuration `json:"default_timeout"`
-}
-
-// StringDuration is used to serialize time.Duration.
-type StringDuration time.Duration
-
-// UnmarshalJSON deserializes a StringDuration.
-func (d *StringDuration) UnmarshalJSON(b []byte) error {
-	duration, err := time.ParseDuration(strings.Trim(string(b), `"`))
-	if err != nil {
-		return err
-	}
-	sd := StringDuration(duration)
-	*d = sd
-	return nil
-}
-
-// MarshalJSON serializes a StringDuration.
-func (d *StringDuration) MarshalJSON() (b []byte, err error) {
-	return []byte(fmt.Sprintf(`"%s"`, time.Duration(*d).String())), nil
+	Name           string `json:"name"`
+	Path           string `json:"path"`
+	DefaultTimeout int    `json:"default_timeout"`
 }

@@ -167,7 +167,7 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		"-test.v",
 	}
 
-	timeout := time.Duration(run.Package.DefaultTimeout)
+	timeout := time.Duration(run.Package.DefaultTimeout) * time.Second
 	if timeout != 0 {
 		runArgs = append(runArgs, fmt.Sprintf("-test.timeout=%s", timeout.String()))
 	}

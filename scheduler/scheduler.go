@@ -129,7 +129,7 @@ func (s *Scheduler) resetStaleRuns(ctx context.Context) error {
 			continue
 		}
 
-		timeout := time.Duration(run.Package.DefaultTimeout)
+		timeout := time.Duration(run.Package.DefaultTimeout) * time.Second
 		if timeout == 0 {
 			timeout = 15 * time.Minute
 		}
