@@ -5,8 +5,22 @@ import (
 	"testing"
 )
 
-func TestExample_simple(t *testing.T) {
-	t.Log("test for something...")
+func TestExample_pass(t *testing.T) {
+	t.Log("pass")
+}
+
+func TestExample_skip(t *testing.T) {
+	t.Skip("skip")
+}
+
+func TestExample_failError(t *testing.T) {
+	t.Error("error")
+	t.Log("should print this")
+}
+
+func TestExample_failFatal(t *testing.T) {
+	t.Fatal("fatal")
+	t.Log("should not print this")
 }
 
 func TestExample_nesting(t *testing.T) {
@@ -35,6 +49,29 @@ func TestExample_parallel(t *testing.T) {
 			t.Logf("parallel test: %d", i)
 		})
 	}
+}
+
+func TestExample_allStates(t *testing.T) {
+	t.Log("running top level test")
+
+	t.Run("skip subtest 1", func(t *testing.T) {
+		t.Skip("skipping subtest 1")
+	})
+	t.Run("subtest 2", func(t *testing.T) {
+		t.Log("running subtest 2")
+
+		t.Run("fail nested subtest 1", func(t *testing.T) {
+			t.Error("failing nested subtest 2_1")
+		})
+
+		t.Run("skip nested subtest 2", func(t *testing.T) {
+			t.Skip("skipping nested subtest 2_2")
+		})
+
+		t.Run("nested subtest 3", func(t *testing.T) {
+			t.Skip("skipping nested subtest 2_3")
+		})
+	})
 }
 
 func BenchmarkExample_simple(b *testing.B) {
