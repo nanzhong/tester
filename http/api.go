@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/nanzhong/tester"
+	"github.com/nanzhong/tester/alerting"
 	"github.com/nanzhong/tester/db"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -17,13 +19,15 @@ import (
 type APIHandler struct {
 	http.Handler
 
-	db db.DB
+	db           db.DB
+	alertManager *alerting.AlertManager
 }
 
 // NewAPIHandler constructs a new `APIHandler`.
 func NewAPIHandler(opts ...Option) *APIHandler {
 	defOpts := &options{
-		db: &db.MemDB{},
+		db:           &db.MemDB{},
+		alertManager: &alerting.AlertManager{},
 	}
 
 	for _, opt := range opts {
@@ -31,7 +35,8 @@ func NewAPIHandler(opts ...Option) *APIHandler {
 	}
 
 	handler := &APIHandler{
-		db: defOpts.db,
+		db:           defOpts.db,
+		alertManager: defOpts.alertManager,
 	}
 
 	r := mux.NewRouter()
@@ -85,6 +90,15 @@ func (h *APIHandler) submitTest(w http.ResponseWriter, r *http.Request) {
 	}
 	RunDurationMetric.With(runLabels).Observe(test.FinishTime.Sub(test.StartTime).Seconds())
 	RunLastMetric.With(runLabels).Set(float64(test.StartTime.Unix()))
+
+	if test.State == tester.TBFailed {
+		go func() {
+			err := h.alertManager.Fire(context.Background(), &alerting.Alert{Test: &test})
+			if err != nil {
+				log.Printf("failed to fire alert: %w", err)
+			}
+		}()
+	}
 
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(&test)

@@ -151,6 +151,7 @@ func (r *Redis) ResetRun(ctx context.Context, id string) error {
 func (r *Redis) DeleteRun(ctx context.Context, id string) error {
 	_, err := r.client.TxPipelined(func(tx redis.Pipeliner) error {
 		tx.LRem(redisKeyRun(redisKeyAll), 1, redisKeyRun(id))
+		tx.Del(redisKeyRun(id))
 		return nil
 	})
 	if err != nil {

@@ -204,7 +204,7 @@ func (r *Runner) runOnce(ctx context.Context) error {
 	for _, test := range tests {
 		log.Printf("Test: %s - %s - %s\n", test.Name, test.State.String(), test.Duration().String())
 		if r.testerAddr != "" {
-			err := r.submitTestResult(test, run.ID)
+			err := r.submitTestResult(test, run)
 			if err != nil {
 				log.Printf("failed to submit result: %s\n", err)
 			}
@@ -214,13 +214,13 @@ func (r *Runner) runOnce(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) submitTestResult(test *tester.Test, runID string) error {
+func (r *Runner) submitTestResult(test *tester.Test, run *tester.Run) error {
 	type testWithRun struct {
 		*tester.Test
 		RunID string `json:"run_id"`
 	}
 
-	jsonTest, err := json.Marshal(testWithRun{Test: test, RunID: runID})
+	jsonTest, err := json.Marshal(testWithRun{Test: test, RunID: run.ID})
 	if err != nil {
 		return fmt.Errorf("marshaling json test: %w", err)
 	}

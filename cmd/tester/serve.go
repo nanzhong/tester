@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/go-redis/redis/v7"
+	"github.com/nanzhong/tester/alerting"
 	"github.com/nanzhong/tester/db"
 	testerhttp "github.com/nanzhong/tester/http"
 	"github.com/nanzhong/tester/scheduler"
@@ -48,6 +49,7 @@ var serveCmd = &cobra.Command{
 			log.Fatalf("failed to listen on %s", viper.GetString("serve-addr"))
 		}
 
+		var httpOpts []testerhttp.Option
 		var dbStore db.DB
 		if viper.GetString("serve-redis-url") != "" {
 			log.Printf("configuring redis backend")
@@ -62,10 +64,29 @@ var serveCmd = &cobra.Command{
 			log.Printf("configuring memory backend")
 			dbStore = &db.MemDB{}
 		}
+		httpOpts = append(httpOpts, testerhttp.WithDB(dbStore))
+
+		if cfg.Alerting != nil {
+			log.Print("configuring alert manager")
+			var (
+				alerters []alerting.Alerter
+				baseURL  = viper.GetString("serve-base-url")
+			)
+
+			if cfg.Alerting.Slack != nil {
+				log.Print("configuring slack alerter")
+				var opts []alerting.SlackOption
+				if cfg.Alerting.Slack.Username != "" {
+					opts = append(opts, alerting.WithSlackUsername(cfg.Alerting.Slack.Username))
+				}
+				alerters = append(alerters, alerting.NewSlackAlerter(cfg.Alerting.Slack.Webhook, opts...))
+			}
+			httpOpts = append(httpOpts, testerhttp.WithAlertManager(alerting.NewAlertManager(baseURL, alerters)))
+		}
 
 		scheduler := scheduler.NewScheduler(cfg.Packages, scheduler.WithDB(dbStore))
-		uiHandler := testerhttp.NewUIHandler(testerhttp.WithDB(dbStore))
-		apiHandler := testerhttp.NewAPIHandler(testerhttp.WithDB(dbStore))
+		uiHandler := testerhttp.NewUIHandler(httpOpts...)
+		apiHandler := testerhttp.NewAPIHandler(httpOpts...)
 
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())
@@ -140,6 +161,9 @@ func init() {
 
 	serveCmd.Flags().String("addr", "0.0.0.0:8080", "The address to serve on")
 	viper.BindPFlag("serve-addr", serveCmd.Flags().Lookup("addr"))
+
+	serveCmd.Flags().String("base-url", "http://0.0.0.0:8080", "The base url to use for constructing link urls")
+	viper.BindPFlag("serve-base-url", serveCmd.Flags().Lookup("base-url"))
 
 	serveCmd.Flags().String("redis-url", "", "The url string of redis")
 	viper.BindPFlag("serve-redis-url", serveCmd.Flags().Lookup("redis-url"))

@@ -4,9 +4,14 @@ import "github.com/nanzhong/tester"
 
 type config struct {
 	Packages []tester.Package `json:"packages"`
-	Slack    slackConfig      `json:"slack"`
+	Alerting *alertingConfig  `json:"alerting"`
+}
+
+type alertingConfig struct {
+	Slack *slackConfig `json:"slack"`
 }
 
 type slackConfig struct {
-	AlertWebhook string `json:"alert_webhook"`
+	Username string `json:"username"`
+	Webhook  string `json:"webhook"`
 }

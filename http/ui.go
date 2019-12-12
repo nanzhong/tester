@@ -22,10 +22,6 @@ type UIHandler struct {
 	db db.DB
 }
 
-type options struct {
-	db db.DB
-}
-
 // NewUIHandler constructs a new `UIHandler`.
 func NewUIHandler(opts ...Option) *UIHandler {
 	defOpts := &options{
