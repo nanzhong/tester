@@ -22,6 +22,10 @@ func (e *testEvent) ParentTest() string {
 }
 
 func (e *testEvent) ParentTests() []string {
+	if e.TopLevel() {
+		return nil
+	}
+
 	var (
 		parents []string
 		name    string
