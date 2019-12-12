@@ -6,7 +6,7 @@ import "github.com/nanzhong/tester/db"
 type Option func(*options)
 
 // WithDB allows configuring a DB.
-func WithDB(db *db.MemDB) Option {
+func WithDB(db db.DB) Option {
 	return func(opts *options) {
 		opts.db = db
 	}

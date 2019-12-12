@@ -3,7 +3,7 @@
     {
       "name": "example",
       "path": "./example.test",
-      "default_timeout": "1s"
+      "default_timeout": "15m0s"
     }
   ]
 }

@@ -16,6 +16,8 @@ type DB interface {
 	GetTest(ctx context.Context, id string) (*tester.Test, error)
 	ListTests(ctx context.Context) ([]*tester.Test, error)
 
+	Archive(ctx context.Context) error
+
 	EnqueueRun(ctx context.Context, run *tester.Run) error
 	StartRun(ctx context.Context, id string) error
 	ResetRun(ctx context.Context, id string) error

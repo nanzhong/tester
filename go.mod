@@ -3,6 +3,7 @@ module github.com/nanzhong/tester
 go 1.13
 
 require (
+	github.com/aws/aws-sdk-go v1.25.48
 	github.com/gobuffalo/envy v1.8.1 // indirect
 	github.com/gobuffalo/logger v1.0.3 // indirect
 	github.com/gobuffalo/packd v0.3.0

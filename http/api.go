@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -78,6 +79,8 @@ func (h *APIHandler) submitTest(w http.ResponseWriter, r *http.Request) {
 		renderAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
+
+	go h.db.Archive(context.Background())
 
 	runLabels := prometheus.Labels{
 		"name":  test.Name,

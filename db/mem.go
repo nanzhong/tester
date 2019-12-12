@@ -24,10 +24,6 @@ func (m *MemDB) AddTest(_ context.Context, test *tester.Test) error {
 
 	m.TestResults = append([]*tester.Test{test}, m.TestResults...)
 
-	if len(m.TestResults) > maxInMemResults {
-		m.TestResults = m.TestResults[:maxInMemResults]
-	}
-
 	return nil
 }
 
@@ -52,6 +48,17 @@ func (m *MemDB) ListTests(_ context.Context) ([]*tester.Test, error) {
 		tests = append(tests, t)
 	}
 	return tests, nil
+}
+
+func (m *MemDB) Archive(_ context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(m.TestResults) > maxInMemResults {
+		m.TestResults = m.TestResults[:maxInMemResults]
+	}
+
+	return nil
 }
 
 func (m *MemDB) EnqueueRun(ctx context.Context, run *tester.Run) error {
