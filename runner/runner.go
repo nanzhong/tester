@@ -16,7 +16,7 @@ import (
 	"github.com/nanzhong/tester"
 )
 
-var resultSubmissionTimeout = 15 * time.Second
+var resultSubmissionTimeout = 60 * time.Second
 
 // TBRunConfig is the configuration for a test/benchmark that the Runner should
 // schedule.
