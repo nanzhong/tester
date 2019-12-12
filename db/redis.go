@@ -107,23 +107,20 @@ func (r *Redis) EnqueueRun(ctx context.Context, run *tester.Run) error {
 }
 
 func (r *Redis) StartRun(ctx context.Context, id string) error {
-	_, err := r.client.TxPipelined(func(tx redis.Pipeliner) error {
-		runJSON, err := tx.Get(redisKeyRun(id)).Result()
-		if err != nil {
-			return err
-		}
+	runJSON, err := r.client.Get(redisKeyRun(id)).Result()
+	if err != nil {
+		return fmt.Errorf("getting run to start: %w", err)
+	}
 
-		var run tester.Run
-		err = json.Unmarshal([]byte(runJSON), &run)
-		if err != nil {
-			return fmt.Errorf("deserializing run: %w", err)
-		}
+	var run tester.Run
+	err = json.Unmarshal([]byte(runJSON), &run)
+	if err != nil {
+		return fmt.Errorf("deserializing run: %w", err)
+	}
 
-		run.StartedAt = time.Now()
-		runJSONBytes, err := json.Marshal(&run)
-		tx.Set(redisKeyRun(id), string(runJSONBytes), 0)
-		return nil
-	})
+	run.StartedAt = time.Now()
+	runJSONBytes, err := json.Marshal(&run)
+	err = r.client.Set(redisKeyRun(id), string(runJSONBytes), 0).Err()
 	if err != nil {
 		return fmt.Errorf("starting run: %w", err)
 	}
@@ -131,23 +128,20 @@ func (r *Redis) StartRun(ctx context.Context, id string) error {
 }
 
 func (r *Redis) ResetRun(ctx context.Context, id string) error {
-	_, err := r.client.TxPipelined(func(tx redis.Pipeliner) error {
-		runJSON, err := tx.Get(redisKeyRun(id)).Result()
-		if err != nil {
-			return err
-		}
+	runJSON, err := r.client.Get(redisKeyRun(id)).Result()
+	if err != nil {
+		return fmt.Errorf("getting run to reset: %w", err)
+	}
 
-		var run tester.Run
-		err = json.Unmarshal([]byte(runJSON), &run)
-		if err != nil {
-			return fmt.Errorf("deserializing run: %w", err)
-		}
+	var run tester.Run
+	err = json.Unmarshal([]byte(runJSON), &run)
+	if err != nil {
+		return fmt.Errorf("deserializing run: %w", err)
+	}
 
-		run.StartedAt = time.Time{}
-		runJSONBytes, err := json.Marshal(&run)
-		tx.Set(redisKeyRun(id), string(runJSONBytes), 0)
-		return nil
-	})
+	run.StartedAt = time.Time{}
+	runJSONBytes, err := json.Marshal(&run)
+	err = r.client.Set(redisKeyRun(id), string(runJSONBytes), 0).Err()
 	if err != nil {
 		return fmt.Errorf("resetting run: %w", err)
 	}
