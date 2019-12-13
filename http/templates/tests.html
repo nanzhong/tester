@@ -41,7 +41,7 @@
         {{$test := index $.TestsByName . 0}}
         <tr>
           <th scope="row"><a href="/tests?view=name#{{.}}">{{.}} <i class="fas fa-link"></i></a></th>
-          <td><span data-toggle="tooltip" data-placement="top" title="{{$test.StartTime | formatTime}}">{{$test.StartTime | formatRelativeTime}}</span></td>
+          <td><span data-toggle="tooltip" data-placement="top" title="{{$test.StartedAt | formatTime}}">{{$test.StartedAt | formatRelativeTime}}</span></td>
           <td>{{$test.Duration | formatDuration}}</td>
           <td><span class="badge badge-pill badge-{{$test.State | testStateColour}}">{{$test.State | testStateMessage}}</span></td>
         </tr>

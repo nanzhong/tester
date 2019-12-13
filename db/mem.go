@@ -8,7 +8,10 @@ import (
 	"github.com/nanzhong/tester"
 )
 
-const maxInMemResults = 200
+const (
+	maxInMemResults = 200
+	maxInMemRuns    = 100
+)
 
 type MemDB struct {
 	mu          sync.RWMutex
@@ -58,6 +61,10 @@ func (m *MemDB) Archive(_ context.Context) error {
 		m.TestResults = m.TestResults[:maxInMemResults]
 	}
 
+	if len(m.Runs) > maxInMemRuns {
+		m.Runs = m.Runs[:maxInMemRuns]
+	}
+
 	return nil
 }
 
@@ -98,28 +105,51 @@ func (m *MemDB) ResetRun(ctx context.Context, id string) error {
 	return ErrNotFound
 }
 
-func (m *MemDB) DeleteRun(ctx context.Context, id string) error {
+func (m *MemDB) CompleteRun(ctx context.Context, id string, testIDs []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var runIdx *int
-	for i, run := range m.Runs {
-		if run.ID == id {
-			runIdx = &i
+	var run *tester.Run
+	for _, r := range m.Runs {
+		if r.ID == id {
+			run = r
 		}
 	}
-	if runIdx == nil {
+	if run == nil {
 		return ErrNotFound
 	}
 
-	m.Runs = append(m.Runs[:*runIdx], m.Runs[*runIdx+1:]...)
+	run.FinishedAt = time.Now()
+	testIDMap := make(map[string]struct{})
+	for _, id := range testIDs {
+		testIDMap[id] = struct{}{}
+	}
+
+	for _, test := range m.TestResults {
+		if _, ok := testIDMap[test.ID]; ok {
+			run.Tests = append(run.Tests, test)
+		}
+	}
 
 	return nil
 }
 
 func (m *MemDB) ListRuns(ctx context.Context) ([]*tester.Run, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	return m.Runs, nil
+}
+
+func (m *MemDB) GetRun(ctx context.Context, id string) (*tester.Run, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, run := range m.Runs {
+		if run.ID == id {
+			return run, nil
+		}
+	}
+
+	return nil, ErrNotFound
 }

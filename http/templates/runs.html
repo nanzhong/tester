@@ -1,7 +1,7 @@
 <div class="row">
   <div class="col">
-    <h1 class="h5">Runs</h1>
-    {{if .Runs}}
+    <h1 class="h5">Pending Runs</h1>
+    {{if .PendingRuns}}
     <table class="table table-sm test">
       <thead>
         <tr>
@@ -12,9 +12,9 @@
         </tr>
       </thead>
       <tbody>
-        {{range .Runs}}
+        {{range .PendingRuns}}
         <tr>
-          <th scope="row">{{.ID}}</th>
+          <th scope="row"><a href="/runs/{{.ID}}">{{.ID}} <i class="fas fa-link"></i></a></th>
           <th scope="row">{{.Package.Name}}</th>
           <td><span data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">{{.EnqueuedAt | formatRelativeTime}}</span></td>
           <td>{{if not .StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.StartedAt | formatTime}}">{{.StartedAt | formatRelativeTime}}</span>{{end}}</td>
@@ -24,6 +24,38 @@
     </table>
     {{else}}
     <p>No pending runs...</p>
+    {{end}}
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h1 class="h5">Finished Runs</h1>
+    {{if .FinishedRuns}}
+    <table class="table table-sm test">
+      <thead>
+        <tr>
+          <th scope="col">ID</th>
+          <th scope="col">Package</th>
+          <th scope="col">Enqueued At</th>
+          <th scope="col">Started At</th>
+          <th scope="col">Finished At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .FinishedRuns}}
+        <tr>
+          <th scope="row"><a href="/runs/{{.ID}}">{{.ID}} <i class="fas fa-link"></i></a></th>
+          <th scope="row">{{.Package.Name}}</th>
+          <td><span data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">{{.EnqueuedAt | formatRelativeTime}}</span></td>
+          <td>{{if not .StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.StartedAt | formatTime}}">{{.StartedAt | formatRelativeTime}}</span>{{end}}</td>
+          <td><span data-toggle="tooltip" data-placement="top" title="{{.FinishedAt | formatTime}}">{{.FinishedAt | formatRelativeTime}}</span></td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p>No finishedrr runs...</p>
     {{end}}
   </div>
 </div>

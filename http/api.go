@@ -12,6 +12,7 @@ import (
 	"github.com/nanzhong/tester"
 	"github.com/nanzhong/tester/alerting"
 	"github.com/nanzhong/tester/db"
+	"github.com/nanzhong/tester/slack"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -21,6 +22,7 @@ type APIHandler struct {
 
 	db           db.DB
 	alertManager *alerting.AlertManager
+	slackApp     *slack.App
 }
 
 // NewAPIHandler constructs a new `APIHandler`.
@@ -37,6 +39,7 @@ func NewAPIHandler(opts ...Option) *APIHandler {
 	handler := &APIHandler{
 		db:           defOpts.db,
 		alertManager: defOpts.alertManager,
+		slackApp:     defOpts.slackApp,
 	}
 
 	r := mux.NewRouter()
@@ -44,6 +47,12 @@ func NewAPIHandler(opts ...Option) *APIHandler {
 	r.HandleFunc("/api/tests", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
 	r.HandleFunc("/api/tests/{test_id}", LogHandlerFunc(handler.getTest)).Methods(http.MethodGet)
 	r.HandleFunc("/api/runs/claim", LogHandlerFunc(handler.claimRun)).Methods(http.MethodPost)
+	r.HandleFunc("/api/runs/{run_id}/complete", LogHandlerFunc(handler.completeRun)).Methods(http.MethodPost)
+
+	if handler.slackApp != nil {
+		r.HandleFunc("/api/slack/command", LogHandlerFunc(handler.slackApp.HandleSlackCommand)).Methods(http.MethodPost)
+	}
+
 	handler.Handler = r
 
 	return handler
@@ -54,27 +63,11 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) submitTest(w http.ResponseWriter, r *http.Request) {
-	type testWithRun struct {
-		tester.Test
-		RunID string `json:"run_id"`
-	}
-
-	var reqBody testWithRun
-	err := json.NewDecoder(r.Body).Decode(&reqBody)
+	var test tester.Test
+	err := json.NewDecoder(r.Body).Decode(&test)
 	if err != nil {
 		renderAPIError(w, 400, fmt.Errorf("decoding json: %w", err))
 		return
-	}
-	test := reqBody.Test
-	runID := reqBody.RunID
-
-	err = h.db.DeleteRun(r.Context(), runID)
-	if err != nil {
-		if err != db.ErrNotFound {
-			log.Printf("failed to delete corresponding run: %s", err)
-			renderAPIError(w, http.StatusInternalServerError, err)
-			return
-		}
 	}
 
 	err = h.db.AddTest(r.Context(), &test)
@@ -88,8 +81,8 @@ func (h *APIHandler) submitTest(w http.ResponseWriter, r *http.Request) {
 		"name":  test.Name,
 		"state": test.State.String(),
 	}
-	RunDurationMetric.With(runLabels).Observe(test.FinishTime.Sub(test.StartTime).Seconds())
-	RunLastMetric.With(runLabels).Set(float64(test.StartTime.Unix()))
+	RunDurationMetric.With(runLabels).Observe(test.FinishedAt.Sub(test.StartedAt).Seconds())
+	RunLastMetric.With(runLabels).Set(float64(test.StartedAt.Unix()))
 
 	if test.State == tester.TBFailed {
 		go func() {
@@ -167,6 +160,25 @@ func (h *APIHandler) claimRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderAPIError(w, http.StatusNotFound, fmt.Errorf("no runs for packages: %s", strings.Join(packages, ", ")))
+}
+
+func (h *APIHandler) completeRun(w http.ResponseWriter, r *http.Request) {
+	var testIDs []string
+	err := json.NewDecoder(r.Body).Decode(&testIDs)
+	if err != nil {
+		log.Printf("failed to parse complete run request: %s", err)
+		renderAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	err = h.db.CompleteRun(r.Context(), mux.Vars(r)["run_id"], testIDs)
+	if err != nil {
+		log.Printf("failed to complete run: %s", err)
+		renderAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func renderAPIError(w http.ResponseWriter, status int, err error) {

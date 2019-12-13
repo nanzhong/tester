@@ -5,7 +5,7 @@
     <h5><a name="{{$name}}" href="#{{$name}}">{{$name}}</a></h5>
       {{range $tests}}
       <a href="/tests/{{.ID}}" class="btn btn-{{.State | testStateColour}} btn-sm my-1 test">
-        {{.Duration | formatDuration}}<br><small>({{.StartTime | formatRelativeTime}})</small>
+        {{.Duration | formatDuration}}<br><small>({{.StartedAt | formatRelativeTime}})</small>
       </a>
       {{end}}
     </div>

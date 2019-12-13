@@ -11,13 +11,15 @@ import (
 )
 
 const (
-	redisRecentLimit     = 500
-	redisRetentionPeriod = 30 * 24 * time.Hour
+	redisTestRecentLimit     = 500
+	redisTestRetentionPeriod = 30 * 24 * time.Hour
+	redisRunRetentionPeriod  = 7 * 24 * time.Hour
 
-	redisPrefixTest = "test"
-	redisPrefixRun  = "run"
-	redisKeyRecent  = "recent"
-	redisKeyAll     = "all"
+	redisPrefixTest     = "test"
+	redisPrefixRun      = "run"
+	redisKeyRecent      = "recent"
+	redisKeyRunPending  = "pending"
+	redisKeyRunFinished = "finished"
 )
 
 type Redis struct {
@@ -37,9 +39,9 @@ func (r *Redis) AddTest(ctx context.Context, test *tester.Test) error {
 	}
 
 	_, err = r.client.TxPipelined(func(tx redis.Pipeliner) error {
-		tx.Set(redisKeyTest(test.ID), testJSON, redisRetentionPeriod)
+		tx.Set(redisKeyTest(test.ID), testJSON, redisTestRetentionPeriod)
 		tx.LPush(redisKeyTest(redisKeyRecent), redisKeyTest(test.ID))
-		tx.LTrim(redisKeyTest(redisKeyRecent), 0, redisRecentLimit-1)
+		tx.LTrim(redisKeyTest(redisKeyRecent), 0, redisTestRecentLimit-1)
 		return nil
 	})
 	if err != nil {
@@ -96,8 +98,8 @@ func (r *Redis) EnqueueRun(ctx context.Context, run *tester.Run) error {
 	}
 
 	_, err = r.client.TxPipelined(func(tx redis.Pipeliner) error {
-		tx.Set(redisKeyRun(run.ID), runJSON, 0)
-		tx.RPush(redisKeyRun(redisKeyAll), redisKeyRun(run.ID))
+		tx.Set(redisKeyRun(run.ID), runJSON, redisRunRetentionPeriod)
+		tx.RPush(redisKeyRun(redisKeyRunPending), redisKeyRun(run.ID))
 		return nil
 	})
 	if err != nil {
@@ -120,7 +122,11 @@ func (r *Redis) StartRun(ctx context.Context, id string) error {
 
 	run.StartedAt = time.Now()
 	runJSONBytes, err := json.Marshal(&run)
-	err = r.client.Set(redisKeyRun(id), string(runJSONBytes), 0).Err()
+	if err != nil {
+		return fmt.Errorf("serializing run: %w", err)
+	}
+
+	err = r.client.Set(redisKeyRun(id), string(runJSONBytes), redisRunRetentionPeriod).Err()
 	if err != nil {
 		return fmt.Errorf("starting run: %w", err)
 	}
@@ -141,45 +147,107 @@ func (r *Redis) ResetRun(ctx context.Context, id string) error {
 
 	run.StartedAt = time.Time{}
 	runJSONBytes, err := json.Marshal(&run)
-	err = r.client.Set(redisKeyRun(id), string(runJSONBytes), 0).Err()
+	if err != nil {
+		return fmt.Errorf("serializing run: %w", err)
+	}
+
+	err = r.client.Set(redisKeyRun(id), string(runJSONBytes), redisRunRetentionPeriod).Err()
 	if err != nil {
 		return fmt.Errorf("resetting run: %w", err)
 	}
 	return nil
 }
 
-func (r *Redis) DeleteRun(ctx context.Context, id string) error {
-	_, err := r.client.TxPipelined(func(tx redis.Pipeliner) error {
-		tx.LRem(redisKeyRun(redisKeyAll), 1, redisKeyRun(id))
-		tx.Del(redisKeyRun(id))
+func (r *Redis) CompleteRun(ctx context.Context, id string, testIDs []string) error {
+	runJSON, err := r.client.Get(redisKeyRun(id)).Result()
+	if err != nil {
+		return fmt.Errorf("getting run to complete: %w", err)
+	}
+
+	var run tester.Run
+	err = json.Unmarshal([]byte(runJSON), &run)
+	if err != nil {
+		return fmt.Errorf("deserializing run: %w", err)
+	}
+
+	run.FinishedAt = time.Now()
+
+	var testKeys []string
+	for _, id := range testIDs {
+		testKeys = append(testKeys, redisKeyTest(id))
+	}
+	testJSONs, err := r.client.MGet(testKeys...).Result()
+	if err != nil {
+		return fmt.Errorf("getting associated test results for run: %w", err)
+	}
+
+	for _, tj := range testJSONs {
+		testJSON, ok := tj.(string)
+		if !ok {
+			return fmt.Errorf("got invalid test: %#v", tj)
+		}
+		var test tester.Test
+		err := json.Unmarshal([]byte(testJSON), &test)
+		if err != nil {
+			return fmt.Errorf("deserializing test to associate with run: %w", err)
+		}
+		run.Tests = append(run.Tests, &test)
+	}
+
+	runJSONBytes, err := json.Marshal(&run)
+	if err != nil {
+		return fmt.Errorf("serializing run: %w", err)
+	}
+
+	_, err = r.client.TxPipelined(func(tx redis.Pipeliner) error {
+		tx.LRem(redisKeyRun(redisKeyRunPending), 1, redisKeyRun(id))
+		tx.Set(redisKeyRun(id), string(runJSONBytes), redisRunRetentionPeriod).Err()
+		tx.RPush(redisKeyRun(redisKeyRunFinished), redisKeyRun(id))
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("deleting run: %w", err)
+		return fmt.Errorf("completing run: %w", err)
 	}
 	return nil
 }
 
 func (r *Redis) ListRuns(ctx context.Context) ([]*tester.Run, error) {
-	runJSONs, err := r.client.Sort(redisKeyRun(redisKeyAll), &redis.Sort{
-		By:  "nosort",
-		Get: []string{"*"},
-	}).Result()
-	if err != nil {
-		return nil, fmt.Errorf("listing runs: %w", err)
-	}
-
 	var runs []*tester.Run
-	for _, rj := range runJSONs {
-		var run tester.Run
-		err := json.Unmarshal([]byte(rj), &run)
+	for _, list := range []string{redisKeyRunPending, redisKeyRunFinished} {
+		runJSONs, err := r.client.Sort(redisKeyRun(list), &redis.Sort{
+			By:  "nosort",
+			Get: []string{"*"},
+		}).Result()
 		if err != nil {
-			return nil, fmt.Errorf("deserializing run: %w", err)
+			return nil, fmt.Errorf("listing runs: %w", err)
 		}
 
-		runs = append(runs, &run)
+		for _, rj := range runJSONs {
+			var run tester.Run
+			err := json.Unmarshal([]byte(rj), &run)
+			if err != nil {
+				return nil, fmt.Errorf("deserializing run: %w", err)
+			}
+
+			runs = append(runs, &run)
+		}
 	}
+
 	return runs, nil
+}
+
+func (r *Redis) GetRun(ctx context.Context, id string) (*tester.Run, error) {
+	runJSON, err := r.client.Get(redisKeyRun(id)).Result()
+	if err != nil {
+		return nil, fmt.Errorf("getting run: %w", err)
+	}
+
+	var run tester.Run
+	err = json.Unmarshal([]byte(runJSON), &run)
+	if err != nil {
+		return nil, fmt.Errorf("deserializing run: %w", err)
+	}
+	return &run, nil
 }
 
 func redisKeyTest(id string) string {

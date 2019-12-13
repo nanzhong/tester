@@ -23,6 +23,7 @@ const (
 	runPrefix    = "runs"
 
 	defaultRecentPeriod = 3 * time.Hour
+	runHistory          = 30 * time.Minute
 )
 
 type S3Option func(*s3Options)
@@ -147,7 +148,7 @@ func (s *S3) ListTests(ctx context.Context) ([]*tester.Test, error) {
 	}
 
 	sort.Slice(tests, func(i int, j int) bool {
-		return tests[i].FinishTime.After(tests[j].FinishTime)
+		return tests[i].FinishedAt.After(tests[j].FinishedAt)
 	})
 
 	return tests, nil
@@ -186,7 +187,7 @@ func (s *S3) Archive(ctx context.Context) error {
 				return err
 			}
 
-			if time.Now().Sub(test.FinishTime) > s.recentPeriod {
+			if time.Now().Sub(test.FinishedAt) > s.recentPeriod {
 				mu.Lock()
 				defer mu.Unlock()
 				keysToDelete = append(keysToDelete, &s3.ObjectIdentifier{
@@ -215,6 +216,8 @@ func (s *S3) Archive(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("archiving test results: %w", err)
 	}
+
+	// TODO archive historic finished runs as well...
 	return nil
 }
 
@@ -263,7 +266,7 @@ func (s *S3) StartRun(ctx context.Context, id string) error {
 		Key:    keyForRun(run.ID),
 	})
 	if err != nil {
-		return fmt.Errorf("updating run started at%w", err)
+		return fmt.Errorf("updating run started at: %w", err)
 	}
 
 	return nil
@@ -296,20 +299,43 @@ func (s *S3) ResetRun(ctx context.Context, id string) error {
 		Key:    keyForRun(run.ID),
 	})
 	if err != nil {
-		return fmt.Errorf("resetting run started at%w", err)
+		return fmt.Errorf("resetting run started at: %w", err)
 	}
 
 	return nil
 }
 
-func (s *S3) DeleteRun(ctx context.Context, id string) error {
-	_, err := s.s3.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
+func (s *S3) CompleteRun(ctx context.Context, id string, testIDs []string) error {
+	obj, err := s.s3.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: &s.bucket,
 		Key:    keyForRun(id),
 	})
 	if err != nil {
-		return fmt.Errorf("deleting run: %w", err)
+		return fmt.Errorf("getting run: %w", err)
 	}
+
+	var run tester.Run
+	err = json.NewDecoder(obj.Body).Decode(&run)
+	if err != nil {
+		return fmt.Errorf("parsing run: %w", err)
+	}
+
+	run.FinishedAt = time.Now()
+
+	runJSON, err := json.Marshal(run)
+	if err != nil {
+		return fmt.Errorf("serializing run: %w", err)
+	}
+	_, err = s.s3.PutObjectWithContext(ctx, &s3.PutObjectInput{
+		Body:   bytes.NewReader(runJSON),
+		Bucket: &s.bucket,
+		Key:    keyForRun(run.ID),
+	})
+	if err != nil {
+		return fmt.Errorf("completing run: %w", err)
+	}
+
+	// TODO lookup tests by ids and save
 
 	return nil
 }
@@ -346,6 +372,9 @@ func (s *S3) ListRuns(ctx context.Context) ([]*tester.Run, error) {
 			if err != nil {
 				return err
 			}
+			if !run.FinishedAt.IsZero() {
+				return nil
+			}
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -360,6 +389,24 @@ func (s *S3) ListRuns(ctx context.Context) ([]*tester.Run, error) {
 	}
 
 	return runs, nil
+}
+
+func (s *S3) GetRun(ctx context.Context, id string) (*tester.Run, error) {
+	obj, err := s.s3.GetObjectWithContext(ctx, &s3.GetObjectInput{
+		Bucket: &s.bucket,
+		Key:    keyForRun(id),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting run: %w", err)
+	}
+
+	var run tester.Run
+	err = json.NewDecoder(obj.Body).Decode(&run)
+	if err != nil {
+		return nil, fmt.Errorf("deserializing run: %w", err)
+	}
+
+	return &run, nil
 }
 
 func keyForTest(id string) *string {

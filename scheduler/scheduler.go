@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"math/rand"
 	"time"
@@ -36,8 +37,9 @@ func WithRunDelay(d time.Duration) Option {
 
 // Scheduler schedules runs.
 type Scheduler struct {
+	Packages []tester.Package
+
 	stop            chan struct{}
-	packages        []tester.Package
 	lastScheduledAt map[string]time.Time
 	runDelay        time.Duration
 	db              db.DB
@@ -58,8 +60,34 @@ func NewScheduler(packages []tester.Package, opts ...Option) *Scheduler {
 		db:              defOpts.db,
 		runDelay:        defOpts.runDelay,
 		lastScheduledAt: make(map[string]time.Time),
-		packages:        packages,
+		Packages:        packages,
 	}
+}
+
+func (s *Scheduler) Schedule(ctx context.Context, packageName string) (*tester.Run, error) {
+	var pkg *tester.Package
+	for _, p := range s.Packages {
+		if p.Name == packageName {
+			pkg = &p
+			break
+		}
+	}
+	if pkg == nil {
+		return nil, fmt.Errorf("unknown package: %s", packageName)
+	}
+
+	run := &tester.Run{
+		ID:         uuid.New().String(),
+		Package:    *pkg,
+		EnqueuedAt: time.Now(),
+	}
+	err := s.db.EnqueueRun(ctx, run)
+	if err != nil {
+		return nil, fmt.Errorf("scheduling package: %w", err)
+	}
+
+	log.Printf("scheduled run %s", pkg.Name)
+	return run, nil
 }
 
 // Run starts the scheduler.
@@ -101,11 +129,14 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 
 	pendingRuns := make(map[string]*tester.Run)
 	for _, run := range runs {
+		if !run.FinishedAt.IsZero() {
+			continue
+		}
 		pendingRuns[run.Package.Name] = run
 	}
 
-	packagesToRun := make([]tester.Package, len(s.packages))
-	copy(packagesToRun, s.packages)
+	packagesToRun := make([]tester.Package, len(s.Packages))
+	copy(packagesToRun, s.Packages)
 	rand.Shuffle(len(packagesToRun), func(i int, j int) {
 		packagesToRun[i], packagesToRun[j] = packagesToRun[j], packagesToRun[i]
 	})
@@ -137,7 +168,7 @@ func (s *Scheduler) resetStaleRuns(ctx context.Context) error {
 	}
 
 	for _, run := range runs {
-		if run.StartedAt.IsZero() {
+		if run.StartedAt.IsZero() || !run.FinishedAt.IsZero() {
 			continue
 		}
 

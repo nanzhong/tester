@@ -19,6 +19,7 @@ import (
 	"github.com/nanzhong/tester/db"
 	testerhttp "github.com/nanzhong/tester/http"
 	"github.com/nanzhong/tester/scheduler"
+	"github.com/nanzhong/tester/slack"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -66,25 +67,38 @@ var serveCmd = &cobra.Command{
 		}
 		httpOpts = append(httpOpts, testerhttp.WithDB(dbStore))
 
-		if cfg.Alerting != nil {
-			log.Print("configuring alert manager")
-			var (
-				alerters []alerting.Alerter
-				baseURL  = viper.GetString("serve-base-url")
-			)
+		log.Print("configuring scheduler")
+		scheduler := scheduler.NewScheduler(cfg.Packages, scheduler.WithDB(dbStore))
 
-			if cfg.Alerting.Slack != nil {
-				log.Print("configuring slack alerter")
-				var opts []alerting.SlackOption
-				if cfg.Alerting.Slack.Username != "" {
-					opts = append(opts, alerting.WithSlackUsername(cfg.Alerting.Slack.Username))
-				}
-				alerters = append(alerters, alerting.NewSlackAlerter(cfg.Alerting.Slack.Webhook, opts...))
+		log.Print("configuring alert manager")
+		var (
+			alerters []alerting.Alerter
+			baseURL  = viper.GetString("serve-base-url")
+		)
+		alertManager := alerting.NewAlertManager(baseURL, alerters)
+		httpOpts = append(httpOpts, testerhttp.WithAlertManager(alertManager))
+
+		var slackApp *slack.App
+		if cfg.Slack != nil {
+			log.Print("configuring slack")
+			opts := []slack.Option{
+				slack.WithScheduler(scheduler),
+				slack.WithBaseURL(baseURL),
 			}
-			httpOpts = append(httpOpts, testerhttp.WithAlertManager(alerting.NewAlertManager(baseURL, alerters)))
+			if cfg.Slack.Username != "" {
+				opts = append(opts, slack.WithUsername(cfg.Slack.Username))
+			}
+			if cfg.Slack.WebhookURL != "" {
+				opts = append(opts, slack.WithWebhookURL(cfg.Slack.WebhookURL))
+			}
+			if cfg.Slack.SigningSecret != "" {
+				opts = append(opts, slack.WithSigningSecret(cfg.Slack.SigningSecret))
+			}
+			slackApp = slack.NewApp(opts...)
+			alertManager.RegisterAlerter(slackApp)
+			httpOpts = append(httpOpts, testerhttp.WithSlackApp(slackApp))
 		}
 
-		scheduler := scheduler.NewScheduler(cfg.Packages, scheduler.WithDB(dbStore))
 		uiHandler := testerhttp.NewUIHandler(httpOpts...)
 		apiHandler := testerhttp.NewAPIHandler(httpOpts...)
 

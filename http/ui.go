@@ -42,6 +42,7 @@ func NewUIHandler(opts ...Option) *UIHandler {
 	r.HandleFunc("/tests", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
 	r.HandleFunc("/tests/{test_id}", LogHandlerFunc(handler.getTest)).Methods(http.MethodGet)
 	r.HandleFunc("/runs", LogHandlerFunc(handler.listRuns)).Methods(http.MethodGet)
+	r.HandleFunc("/runs/{run_id}", LogHandlerFunc(handler.getRun)).Methods(http.MethodGet)
 	handler.Handler = r
 
 	return handler
@@ -116,13 +117,48 @@ func (h *UIHandler) listRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var (
+		pendingRuns  []*tester.Run
+		finishedRuns []*tester.Run
+	)
+	for _, run := range runs {
+		if run.FinishedAt.IsZero() {
+			pendingRuns = append(pendingRuns, run)
+		} else {
+			finishedRuns = append(finishedRuns, run)
+		}
+	}
+
 	value := &struct {
-		Runs []*tester.Run
+		PendingRuns  []*tester.Run
+		FinishedRuns []*tester.Run
 	}{
-		Runs: runs,
+		PendingRuns:  pendingRuns,
+		FinishedRuns: finishedRuns,
 	}
 
 	h.render(w, r, "runs", value)
+}
+
+func (h *UIHandler) getRun(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	run, err := h.db.GetRun(r.Context(), vars["run_id"])
+	if err != nil {
+		if err == db.ErrNotFound {
+			h.renderError(w, r, err, http.StatusNotFound)
+		} else {
+			h.renderError(w, r, err, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	value := &struct {
+		Run *tester.Run
+	}{
+		Run: run,
+	}
+
+	h.render(w, r, "run_details", value)
 }
 
 func (h *UIHandler) render(w http.ResponseWriter, r *http.Request, name string, value interface{}) {

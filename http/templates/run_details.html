@@ -1,0 +1,42 @@
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/runs">Runs</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{.Run.Package.Name}} - {{.Run.ID}}</li>
+  </ol>
+</nav>
+
+<table class="table table-sm test">
+  <thead>
+    <tr>
+      <th scope="col">Enqueued At</th>
+      <th scope="col">Started At</th>
+      <th scope="col">Finished At</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span data-toggle="tooltip" data-placement="top" title="{{.Run.EnqueuedAt | formatTime}}">{{.Run.EnqueuedAt | formatRelativeTime}}</span></td>
+      <td>{{if not .Run.StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.Run.StartedAt | formatTime}}">{{.Run.StartedAt | formatRelativeTime}}</span>{{end}}</td>
+      <td>{{if not .Run.FinishedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.Run.FinishedAt | formatTime}}">{{.Run.FinishedAt | formatRelativeTime}}</span>{{end}}</td>
+    </tr>
+  </tbody>
+</table>
+
+{{if .Run.Tests}}
+{{range .Run.Tests}}
+<div class="row mb-2">
+  <div class="col-lg">
+    {{template "test_card" .}}
+  </div>
+  <div class="col-lg-8">
+    {{if .OutputString}}
+    <pre><code>{{.OutputString}}</code></pre>
+    {{else}}
+    <p>No logs received yet...</p>
+    {{end}}
+  </div>
+</div>
+{{end}}
+{{else}}
+<p>No test results...</p>
+{{end}}

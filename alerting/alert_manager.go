@@ -11,7 +11,7 @@ import (
 type Alert struct {
 	Test *tester.Test
 
-	baseURL string
+	BaseURL string
 }
 
 type Alerter interface {
@@ -30,8 +30,12 @@ func NewAlertManager(baseURL string, alerters []Alerter) *AlertManager {
 	}
 }
 
+func (a *AlertManager) RegisterAlerter(alerter Alerter) {
+	a.alerters = append(a.alerters, alerter)
+}
+
 func (a *AlertManager) Fire(ctx context.Context, alert *Alert) error {
-	alert.baseURL = a.baseURL
+	alert.BaseURL = a.baseURL
 
 	var eg errgroup.Group
 	for _, alerter := range a.alerters {

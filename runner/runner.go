@@ -200,27 +200,29 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		return fmt.Errorf("processing events: %w", err)
 	}
 
-	log.Printf("finished run for %s\n", run.Package.Name)
+	var testIDs []string
 	for _, test := range tests {
-		log.Printf("Test: %s - %s - %s\n", test.Name, test.State.String(), test.Duration().String())
+		log.Printf("Test: %s - %s - %s", test.Name, test.State.String(), test.Duration().String())
+		testIDs = append(testIDs, test.ID)
 		if r.testerAddr != "" {
 			err := r.submitTestResult(test, run)
 			if err != nil {
-				log.Printf("failed to submit result: %s\n", err)
+				log.Printf("failed to submit result: %s", err)
 			}
 
 		}
 	}
+	err = r.completeRun(run.ID, testIDs)
+	if err != nil {
+		log.Printf("failed to mark run complete: %s", err)
+	}
+
+	log.Printf("finished run for %s", run.Package.Name)
 	return nil
 }
 
 func (r *Runner) submitTestResult(test *tester.Test, run *tester.Run) error {
-	type testWithRun struct {
-		*tester.Test
-		RunID string `json:"run_id"`
-	}
-
-	jsonTest, err := json.Marshal(testWithRun{Test: test, RunID: run.ID})
+	jsonTest, err := json.Marshal(test)
 	if err != nil {
 		return fmt.Errorf("marshaling json test: %w", err)
 	}
@@ -248,6 +250,35 @@ func (r *Runner) submitTestResult(test *tester.Test, run *tester.Run) error {
 	return nil
 }
 
+func (r *Runner) completeRun(runID string, testIDs []string) error {
+	jsonTestIDs, err := json.Marshal(testIDs)
+	if err != nil {
+		return fmt.Errorf("marshaling test ids: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), resultSubmissionTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		fmt.Sprintf("%s/api/runs/%s/complete", r.testerAddr, runID),
+		bytes.NewBuffer(jsonTestIDs),
+	)
+	if err != nil {
+		return fmt.Errorf("constructing request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("completing run: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("received unexpected status code: %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func processEvents(events []*testEvent) ([]*tester.Test, []*tester.Benchmark, error) {
 	var (
 		tests      []*tester.Test
@@ -267,7 +298,7 @@ func processEvents(events []*testEvent) ([]*tester.Test, []*tester.Benchmark, er
 				TBCommon: tester.TBCommon{
 					ID:        uuid.New().String(),
 					Name:      event.Test,
-					StartTime: event.Time,
+					StartedAt: event.Time,
 				},
 			}
 			testMap[event.Test] = test
@@ -284,7 +315,7 @@ func processEvents(events []*testEvent) ([]*tester.Test, []*tester.Benchmark, er
 			if !ok {
 				return nil, nil, fmt.Errorf("missing test: %s", event.Test)
 			}
-			test.FinishTime = event.Time
+			test.FinishedAt = event.Time
 			switch event.Action {
 			case "pass":
 				test.State = tester.TBPassed

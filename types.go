@@ -33,15 +33,15 @@ func (s TBState) String() string {
 type TBCommon struct {
 	ID         string    `json:"id"`
 	Name       string    `json:"name"`
-	StartTime  time.Time `json:"start_time"`
-	FinishTime time.Time `json:"duration"`
+	StartedAt  time.Time `json:"started_at"`
+	FinishedAt time.Time `json:"finished_at"`
 	State      TBState   `json:"state"`
 	Output     []byte    `json:"output"`
 }
 
 // Duration returns the run duration the Test.
 func (c *TBCommon) Duration() time.Duration {
-	return c.FinishTime.Sub(c.StartTime)
+	return c.FinishedAt.Sub(c.StartedAt)
 }
 
 func (c *TBCommon) OutputString() string {
@@ -70,11 +70,14 @@ type Run struct {
 	Args       []string  `json:"args"`
 	EnqueuedAt time.Time `json:"enqueued_at"`
 	StartedAt  time.Time `json:"started_at"`
+	FinishedAt time.Time `json:"finished_at"`
+	Tests      []*Test   `json:"tests"`
 }
 
 // Package represents a go package that can be tested or benchmarked.
 type Package struct {
-	Name           string `json:"name"`
-	Path           string `json:"path"`
-	DefaultTimeout int    `json:"default_timeout"`
+	Name           string              `json:"name"`
+	Path           string              `json:"path"`
+	DefaultTimeout int                 `json:"default_timeout"`
+	Options        map[string][]string `json:"options"`
 }
