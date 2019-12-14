@@ -202,7 +202,7 @@ func (r *Redis) CompleteRun(ctx context.Context, id string, testIDs []string) er
 	_, err = r.client.TxPipelined(func(tx redis.Pipeliner) error {
 		tx.LRem(redisKeyRun(redisKeyRunPending), 1, redisKeyRun(id))
 		tx.Set(redisKeyRun(id), string(runJSONBytes), redisRunRetentionPeriod).Err()
-		tx.RPush(redisKeyRun(redisKeyRunFinished), redisKeyRun(id))
+		tx.LPush(redisKeyRun(redisKeyRunFinished), redisKeyRun(id))
 		return nil
 	})
 	if err != nil {
