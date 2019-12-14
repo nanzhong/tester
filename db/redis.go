@@ -13,6 +13,7 @@ import (
 const (
 	redisTestRecentLimit     = 500
 	redisTestRetentionPeriod = 30 * 24 * time.Hour
+	redisRunFinishedLimit    = 100
 	redisRunRetentionPeriod  = 7 * 24 * time.Hour
 
 	redisPrefixTest     = "test"
@@ -41,7 +42,6 @@ func (r *Redis) AddTest(ctx context.Context, test *tester.Test) error {
 	_, err = r.client.TxPipelined(func(tx redis.Pipeliner) error {
 		tx.Set(redisKeyTest(test.ID), testJSON, redisTestRetentionPeriod)
 		tx.LPush(redisKeyTest(redisKeyRecent), redisKeyTest(test.ID))
-		tx.LTrim(redisKeyTest(redisKeyRecent), 0, redisTestRecentLimit-1)
 		return nil
 	})
 	if err != nil {
@@ -87,7 +87,14 @@ func (r *Redis) ListTests(ctx context.Context) ([]*tester.Test, error) {
 }
 
 func (r *Redis) Archive(ctx context.Context) error {
-	// No need to explicitly archive for redis since we use expiries.
+	_, err := r.client.TxPipelined(func(tx redis.Pipeliner) error {
+		tx.LTrim(redisKeyTest(redisKeyRecent), 0, redisTestRecentLimit-1)
+		tx.LTrim(redisKeyRun(redisKeyRunFinished), 0, redisRunFinishedLimit-1)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("archiving old tests results and runs: %w", err)
+	}
 	return nil
 }
 
