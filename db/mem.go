@@ -42,13 +42,16 @@ func (m *MemDB) GetTest(_ context.Context, id string) (*tester.Test, error) {
 	return nil, ErrNotFound
 }
 
-func (m *MemDB) ListTests(_ context.Context) ([]*tester.Test, error) {
+func (m *MemDB) ListTests(_ context.Context, limit int) ([]*tester.Test, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	tests := make([]*tester.Test, 0, len(m.TestResults))
+	var tests []*tester.Test
 	for _, t := range m.TestResults {
 		tests = append(tests, t)
+		if len(tests) == limit {
+			break
+		}
 	}
 	return tests, nil
 }
@@ -134,11 +137,37 @@ func (m *MemDB) CompleteRun(ctx context.Context, id string, testIDs []string) er
 	return nil
 }
 
-func (m *MemDB) ListRuns(ctx context.Context) ([]*tester.Run, error) {
+func (m *MemDB) ListPendingRuns(ctx context.Context) ([]*tester.Run, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.Runs, nil
+	var runs []*tester.Run
+	for _, run := range m.Runs {
+		if !run.FinishedAt.IsZero() {
+			continue
+		}
+		runs = append(runs, run)
+	}
+
+	return runs, nil
+}
+
+func (m *MemDB) ListFinishedRuns(ctx context.Context, limit int) ([]*tester.Run, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var runs []*tester.Run
+	for _, run := range m.Runs {
+		if run.FinishedAt.IsZero() {
+			continue
+		}
+		runs = append(runs, run)
+		if len(runs) == limit {
+			break
+		}
+	}
+
+	return runs, nil
 }
 
 func (m *MemDB) GetRun(ctx context.Context, id string) (*tester.Run, error) {

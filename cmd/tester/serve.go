@@ -12,8 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/go-redis/redis/v7"
 	"github.com/nanzhong/tester/alerting"
 	"github.com/nanzhong/tester/db"
@@ -58,9 +56,6 @@ var serveCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal("failed to configure redis: %w", err)
 			}
-		} else if viper.GetString("serve-s3-endpoint") != "" {
-			log.Printf("configuring s3 backend")
-			dbStore = configureS3()
 		} else {
 			log.Printf("configuring memory backend")
 			dbStore = &db.MemDB{}
@@ -181,17 +176,6 @@ func init() {
 
 	serveCmd.Flags().String("redis-url", "", "The url string of redis")
 	viper.BindPFlag("serve-redis-url", serveCmd.Flags().Lookup("redis-url"))
-
-	serveCmd.Flags().String("s3-bucket", "", "The name of the s3 compatible bucket")
-	viper.BindPFlag("serve-s3-bucket", serveCmd.Flags().Lookup("s3-bucket"))
-	serveCmd.Flags().String("s3-endpoint", "", "The endpoint for a s3 compatible backend")
-	viper.BindPFlag("serve-s3-endpoint", serveCmd.Flags().Lookup("s3-endpoint"))
-	serveCmd.Flags().String("s3-region", "", "The region for a s3 compatible backend")
-	viper.BindPFlag("serve-s3-region", serveCmd.Flags().Lookup("s3-region"))
-	serveCmd.Flags().String("s3-key", "", "The s3 access key id")
-	viper.BindPFlag("serve-s3-key", serveCmd.Flags().Lookup("s3-key"))
-	serveCmd.Flags().String("s3-secret", "", "The s3 secret access key")
-	viper.BindPFlag("serve-s3-secret", serveCmd.Flags().Lookup("s3-secret"))
 }
 
 func configureRedis() (db.DB, error) {
@@ -209,19 +193,4 @@ func configureRedis() (db.DB, error) {
 		return nil, fmt.Errorf("verifying redis connectivity: %w", err)
 	}
 	return db.NewRedis(redisClient), nil
-}
-
-func configureS3() db.DB {
-	s3Key := viper.GetString("serve-s3-key")
-	s3Secret := viper.GetString("serve-s3-secret")
-	s3Endpoint := viper.GetString("serve-s3-endpoint")
-	s3Region := viper.GetString("serve-s3-region")
-	s3Bucket := viper.GetString("serve-s3-bucket")
-
-	s3Config := &aws.Config{
-		Credentials: credentials.NewStaticCredentials(s3Key, s3Secret, ""),
-		Endpoint:    &s3Endpoint,
-		Region:      &s3Region,
-	}
-	return db.NewS3(s3Config, s3Bucket)
 }

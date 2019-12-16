@@ -14,7 +14,7 @@ var ErrNotFound = errors.New("not found")
 type DB interface {
 	AddTest(ctx context.Context, test *tester.Test) error
 	GetTest(ctx context.Context, id string) (*tester.Test, error)
-	ListTests(ctx context.Context) ([]*tester.Test, error)
+	ListTests(ctx context.Context, limit int) ([]*tester.Test, error)
 
 	Archive(ctx context.Context) error
 
@@ -22,6 +22,7 @@ type DB interface {
 	StartRun(ctx context.Context, id string) error
 	ResetRun(ctx context.Context, id string) error
 	CompleteRun(ctx context.Context, id string, testIDs []string) error
-	ListRuns(ctx context.Context) ([]*tester.Run, error)
+	ListPendingRuns(ctx context.Context) ([]*tester.Run, error)
+	ListFinishedRuns(ctx context.Context, limit int) ([]*tester.Run, error)
 	GetRun(ctx context.Context, id string) (*tester.Run, error)
 }

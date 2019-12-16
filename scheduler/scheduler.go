@@ -122,7 +122,7 @@ func (s *Scheduler) Stop() {
 }
 
 func (s *Scheduler) scheduleRuns(ctx context.Context) error {
-	runs, err := s.db.ListRuns(ctx)
+	runs, err := s.db.ListPendingRuns(ctx)
 	if err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 }
 
 func (s *Scheduler) resetStaleRuns(ctx context.Context) error {
-	runs, err := s.db.ListRuns(ctx)
+	runs, err := s.db.ListPendingRuns(ctx)
 	if err != nil {
 		return err
 	}

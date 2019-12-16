@@ -27,6 +27,8 @@ type Redis struct {
 	client *redis.Client
 }
 
+var _ DB = (*Redis)(nil)
+
 func NewRedis(client *redis.Client) *Redis {
 	return &Redis{
 		client: client,
@@ -64,11 +66,15 @@ func (r *Redis) GetTest(ctx context.Context, id string) (*tester.Test, error) {
 	return &test, nil
 }
 
-func (r *Redis) ListTests(ctx context.Context) ([]*tester.Test, error) {
-	testJSONs, err := r.client.Sort(redisKeyTest(redisKeyRecent), &redis.Sort{
+func (r *Redis) ListTests(ctx context.Context, limit int) ([]*tester.Test, error) {
+	sort := &redis.Sort{
 		By:  "nosort",
 		Get: []string{"*"},
-	}).Result()
+	}
+	if limit > 0 {
+		sort.Count = int64(limit)
+	}
+	testJSONs, err := r.client.Sort(redisKeyTest(redisKeyRecent), sort).Result()
 	if err != nil {
 		return nil, fmt.Errorf("listing test results: %w", err)
 	}
@@ -218,26 +224,46 @@ func (r *Redis) CompleteRun(ctx context.Context, id string, testIDs []string) er
 	return nil
 }
 
-func (r *Redis) ListRuns(ctx context.Context) ([]*tester.Run, error) {
+func (r *Redis) ListPendingRuns(ctx context.Context) ([]*tester.Run, error) {
+	runs, err := r.listRuns(ctx, redisKeyRun(redisKeyRunPending), 0)
+	if err != nil {
+		return nil, fmt.Errorf("listing runs: %w", err)
+	}
+	return runs, nil
+}
+
+func (r *Redis) ListFinishedRuns(ctx context.Context, limit int) ([]*tester.Run, error) {
+	runs, err := r.listRuns(ctx, redisKeyRun(redisKeyRunFinished), limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing runs: %w", err)
+	}
+
+	return runs, nil
+}
+
+func (r *Redis) listRuns(ctx context.Context, runKey string, limit int) ([]*tester.Run, error) {
 	var runs []*tester.Run
-	for _, list := range []string{redisKeyRunPending, redisKeyRunFinished} {
-		runJSONs, err := r.client.Sort(redisKeyRun(list), &redis.Sort{
-			By:  "nosort",
-			Get: []string{"*"},
-		}).Result()
+
+	sort := &redis.Sort{
+		By:  "nosort",
+		Get: []string{"*"},
+	}
+	if limit > 0 {
+		sort.Count = int64(limit)
+	}
+	runJSONs, err := r.client.Sort(runKey, sort).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, rj := range runJSONs {
+		var run tester.Run
+		err := json.Unmarshal([]byte(rj), &run)
 		if err != nil {
-			return nil, fmt.Errorf("listing runs: %w", err)
+			return nil, fmt.Errorf("deserializing run: %w", err)
 		}
 
-		for _, rj := range runJSONs {
-			var run tester.Run
-			err := json.Unmarshal([]byte(rj), &run)
-			if err != nil {
-				return nil, fmt.Errorf("deserializing run: %w", err)
-			}
-
-			runs = append(runs, &run)
-		}
+		runs = append(runs, &run)
 	}
 
 	return runs, nil

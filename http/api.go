@@ -98,7 +98,7 @@ func (h *APIHandler) submitTest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) listTests(w http.ResponseWriter, r *http.Request) {
-	tests, err := h.db.ListTests(r.Context())
+	tests, err := h.db.ListTests(r.Context(), 0)
 	if err != nil {
 		log.Printf("failed to list tests: %s", err)
 		renderAPIError(w, http.StatusInternalServerError, err)
@@ -139,7 +139,7 @@ func (h *APIHandler) claimRun(w http.ResponseWriter, r *http.Request) {
 		supportedPackages[pkg] = struct{}{}
 	}
 
-	runs, err := h.db.ListRuns(r.Context())
+	runs, err := h.db.ListPendingRuns(r.Context())
 	if err != nil {
 		log.Printf("failed to list runs: %s", err)
 		renderAPIError(w, http.StatusInternalServerError, err)

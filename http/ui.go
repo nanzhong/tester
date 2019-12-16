@@ -61,7 +61,7 @@ func (h *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
 		template = "tests"
 	}
 
-	tests, err := h.db.ListTests(r.Context())
+	tests, err := h.db.ListTests(r.Context(), 0)
 	if err != nil {
 		h.renderError(w, r, err, http.StatusInternalServerError)
 		return
@@ -110,23 +110,18 @@ func (h *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UIHandler) listRuns(w http.ResponseWriter, r *http.Request) {
-	runs, err := h.db.ListRuns(r.Context())
+	pendingRuns, err := h.db.ListPendingRuns(r.Context())
 	if err != nil {
 		log.Printf("failed to list runs: %s", err)
 		h.renderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	var (
-		pendingRuns  []*tester.Run
-		finishedRuns []*tester.Run
-	)
-	for _, run := range runs {
-		if run.FinishedAt.IsZero() {
-			pendingRuns = append(pendingRuns, run)
-		} else {
-			finishedRuns = append(finishedRuns, run)
-		}
+	finishedRuns, err := h.db.ListFinishedRuns(r.Context(), 50)
+	if err != nil {
+		log.Printf("failed to list runs: %s", err)
+		h.renderError(w, r, err, http.StatusInternalServerError)
+		return
 	}
 
 	value := &struct {
