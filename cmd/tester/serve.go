@@ -16,6 +16,7 @@ import (
 	"github.com/nanzhong/tester/alerting"
 	"github.com/nanzhong/tester/db"
 	testerhttp "github.com/nanzhong/tester/http"
+	"github.com/nanzhong/tester/http/okta"
 	"github.com/nanzhong/tester/scheduler"
 	"github.com/nanzhong/tester/slack"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -100,7 +101,15 @@ var serveCmd = &cobra.Command{
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())
 		mux.Handle("/api/", apiHandler)
-		mux.Handle("/", uiHandler)
+
+		oktaAuthHandler := configureOktaAuth(uiHandler.RenderError)
+		if oktaAuthHandler != nil {
+			log.Println("configuring okta auth")
+			mux.HandleFunc("/oauth/callback", oktaAuthHandler.AuthCodeCallbackHandler)
+			mux.HandleFunc("/", oktaAuthHandler.Ensure(uiHandler.ServeHTTP))
+		} else {
+			mux.Handle("/", uiHandler)
+		}
 
 		httpServer := http.Server{
 			Handler: mux,
@@ -176,6 +185,17 @@ func init() {
 
 	serveCmd.Flags().String("redis-url", "", "The url string of redis")
 	viper.BindPFlag("serve-redis-url", serveCmd.Flags().Lookup("redis-url"))
+
+	serveCmd.Flags().String("okta-session-key", "", "Okta session key")
+	viper.BindPFlag("serve-okta-session-key", serveCmd.Flags().Lookup("okta-session-key"))
+	serveCmd.Flags().String("okta-client-id", "", "Okta client ID")
+	viper.BindPFlag("serve-okta-client-id", serveCmd.Flags().Lookup("okta-client-id"))
+	serveCmd.Flags().String("okta-client-secret", "", "Okta client secret")
+	viper.BindPFlag("serve-okta-client-secret", serveCmd.Flags().Lookup("okta-client-secret"))
+	serveCmd.Flags().String("okta-issuer", "", "Okta issuer")
+	viper.BindPFlag("serve-okta-issuer", serveCmd.Flags().Lookup("okta-issuer"))
+	serveCmd.Flags().String("okta-redirect-uri", "", "Okta redirect URI")
+	viper.BindPFlag("serve-okta-redirect-uri", serveCmd.Flags().Lookup("okta-redirect-uri"))
 }
 
 func configureRedis() (db.DB, error) {
@@ -193,4 +213,21 @@ func configureRedis() (db.DB, error) {
 		return nil, fmt.Errorf("verifying redis connectivity: %w", err)
 	}
 	return db.NewRedis(redisClient), nil
+}
+
+func configureOktaAuth(errorWriter func(w http.ResponseWriter, r *http.Request, err error, status int)) *okta.AuthHandler {
+	sessionKey := viper.GetString("serve-okta-session-key")
+	clientID := viper.GetString("serve-okta-client-id")
+	clientSecret := viper.GetString("serve-okta-client-secret")
+	issuer := viper.GetString("serve-okta-issuer")
+	redirectURI := viper.GetString("serve-okta-redirect-uri")
+
+	if sessionKey != "" &&
+		clientID != "" &&
+		clientSecret != "" &&
+		issuer != "" &&
+		redirectURI != "" {
+		return okta.NewAuthHandler([]byte(sessionKey), clientID, clientSecret, issuer, redirectURI, errorWriter)
+	}
+	return nil
 }

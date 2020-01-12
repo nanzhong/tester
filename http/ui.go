@@ -63,7 +63,7 @@ func (h *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
 
 	tests, err := h.db.ListTests(r.Context(), 0)
 	if err != nil {
-		h.renderError(w, r, err, http.StatusInternalServerError)
+		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -85,7 +85,7 @@ func (h *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(value.TestNames)
 
-	h.render(w, r, template, value)
+	h.Render(w, r, template, value)
 }
 
 func (h *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
@@ -93,9 +93,9 @@ func (h *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
 	test, err := h.db.GetTest(r.Context(), vars["test_id"])
 	if err != nil {
 		if err == db.ErrNotFound {
-			h.renderError(w, r, err, http.StatusNotFound)
+			h.RenderError(w, r, err, http.StatusNotFound)
 		} else {
-			h.renderError(w, r, err, http.StatusInternalServerError)
+			h.RenderError(w, r, err, http.StatusInternalServerError)
 		}
 		return
 	}
@@ -106,21 +106,21 @@ func (h *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
 		Test: test,
 	}
 
-	h.render(w, r, "test_details", value)
+	h.Render(w, r, "test_details", value)
 }
 
 func (h *UIHandler) listRuns(w http.ResponseWriter, r *http.Request) {
 	pendingRuns, err := h.db.ListPendingRuns(r.Context())
 	if err != nil {
 		log.Printf("failed to list runs: %s", err)
-		h.renderError(w, r, err, http.StatusInternalServerError)
+		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
 	finishedRuns, err := h.db.ListFinishedRuns(r.Context(), 50)
 	if err != nil {
 		log.Printf("failed to list runs: %s", err)
-		h.renderError(w, r, err, http.StatusInternalServerError)
+		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -132,7 +132,7 @@ func (h *UIHandler) listRuns(w http.ResponseWriter, r *http.Request) {
 		FinishedRuns: finishedRuns,
 	}
 
-	h.render(w, r, "runs", value)
+	h.Render(w, r, "runs", value)
 }
 
 func (h *UIHandler) getRun(w http.ResponseWriter, r *http.Request) {
@@ -140,9 +140,9 @@ func (h *UIHandler) getRun(w http.ResponseWriter, r *http.Request) {
 	run, err := h.db.GetRun(r.Context(), vars["run_id"])
 	if err != nil {
 		if err == db.ErrNotFound {
-			h.renderError(w, r, err, http.StatusNotFound)
+			h.RenderError(w, r, err, http.StatusNotFound)
 		} else {
-			h.renderError(w, r, err, http.StatusInternalServerError)
+			h.RenderError(w, r, err, http.StatusInternalServerError)
 		}
 		return
 	}
@@ -153,13 +153,13 @@ func (h *UIHandler) getRun(w http.ResponseWriter, r *http.Request) {
 		Run: run,
 	}
 
-	h.render(w, r, "run_details", value)
+	h.Render(w, r, "run_details", value)
 }
 
-func (h *UIHandler) render(w http.ResponseWriter, r *http.Request, name string, value interface{}) {
+func (h *UIHandler) Render(w http.ResponseWriter, r *http.Request, name string, value interface{}) {
 	var b bytes.Buffer
 	if err := h.ExecuteTemplate(name, &b, value); err != nil {
-		h.renderError(w, r, err, http.StatusInternalServerError)
+		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -168,7 +168,7 @@ func (h *UIHandler) render(w http.ResponseWriter, r *http.Request, name string, 
 	b.WriteTo(w)
 }
 
-func (h *UIHandler) renderError(w http.ResponseWriter, r *http.Request, err error, status int) {
+func (h *UIHandler) RenderError(w http.ResponseWriter, r *http.Request, err error, status int) {
 	value := struct {
 		Status int
 		Error  error
