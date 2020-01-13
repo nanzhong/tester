@@ -86,7 +86,7 @@ func (h *AuthHandler) Ensure(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		redirectPath := h.issuer + "/v1/authorize?" + q.Encode()
-		http.Redirect(w, r, redirectPath, http.StatusMovedPermanently)
+		http.Redirect(w, r, redirectPath, http.StatusFound)
 	})
 }
 
@@ -127,7 +127,7 @@ func (h *AuthHandler) AuthCodeCallbackHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func generateNonce() (string, error) {
