@@ -17,6 +17,10 @@ type errTemplateNotFound struct {
 	path string
 }
 
+func init() {
+	pkger.Include("/http/templates")
+}
+
 func (e *errTemplateNotFound) Error() string {
 	return fmt.Sprintf("template not found: %s", e.path)
 }
