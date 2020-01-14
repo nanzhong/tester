@@ -7,16 +7,16 @@ all: tester
 .PHONY: clean
 clean:
 	rm -rf dist
-	packr2 clean
+	rm -rf ./cmd/tester/pkged.go
 
 .PHONY: install
 install:
-	packr2
+	pkger -o ./cmd/tester
 	go install ./cmd/tester/...
 
 .PHONY: tester
 tester:
-	packr2
+	pkger -o ./cmd/tester
 	GOOS=linux GOARCH=amd64 go build -o ./dist/tester-linux-amd64 ./cmd/tester/...
 	docker build -t $(IMAGE_NAME):$(COMMIT) .
 ifdef LATEST

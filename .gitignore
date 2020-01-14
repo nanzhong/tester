@@ -1,4 +1,4 @@
-dist/*
+example.test
+packages.json
 cmd/tester/tester
-http/http-packr.go
-packrd
+cmd/tester/pkged.go

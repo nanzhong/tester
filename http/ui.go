@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"sort"
 
-	packr "github.com/gobuffalo/packr/v2"
 	"github.com/gorilla/mux"
 	"github.com/nanzhong/tester"
 	"github.com/nanzhong/tester/db"
@@ -16,8 +15,6 @@ import (
 // UIHandler is the http handler for presenting the web UI.
 type UIHandler struct {
 	http.Handler
-
-	templateFiles *packr.Box
 
 	db db.DB
 }
@@ -33,8 +30,7 @@ func NewUIHandler(opts ...Option) *UIHandler {
 	}
 
 	handler := &UIHandler{
-		db:            defOpts.db,
-		templateFiles: packr.New("templates", "./templates"),
+		db: defOpts.db,
 	}
 
 	r := mux.NewRouter()
