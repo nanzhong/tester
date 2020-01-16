@@ -171,6 +171,18 @@ func (r *Redis) ResetRun(ctx context.Context, id string) error {
 	return nil
 }
 
+func (r *Redis) DeleteRun(ctx context.Context, id string) error {
+	_, err := r.client.TxPipelined(func(tx redis.Pipeliner) error {
+		tx.LRem(redisKeyRun(redisKeyRunPending), 0, redisKeyRun(id))
+		tx.Del(redisKeyRun(id))
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("deleting run: %w", err)
+	}
+	return nil
+}
+
 func (r *Redis) CompleteRun(ctx context.Context, id string, testIDs []string) error {
 	runJSON, err := r.client.Get(redisKeyRun(id)).Result()
 	if err != nil {

@@ -109,6 +109,9 @@ func (s *Scheduler) Run() {
 		eg.Go(func() error {
 			return s.resetStaleRuns(ctx)
 		})
+		eg.Go(func() error {
+			return s.cleanupUnprocessableRuns(ctx)
+		})
 		err := eg.Wait()
 		if err != nil {
 			log.Printf("scheduling error: %s", err)
@@ -155,6 +158,28 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 			})
 			s.lastScheduledAt[pkg.Name] = time.Now()
 			log.Printf("scheduled run %s", pkg.Name)
+		}
+	}
+
+	return nil
+}
+
+func (s *Scheduler) cleanupUnprocessableRuns(ctx context.Context) error {
+	runs, err := s.db.ListPendingRuns(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, run := range runs {
+		// Cleanup runs that haven't been picked up for 1 day.
+		// This usually indicates an old run/package that is no longer runnable.
+		if !run.StartedAt.IsZero() || time.Now().Sub(run.EnqueuedAt) < 24*time.Hour {
+			continue
+		}
+
+		err := s.db.DeleteRun(ctx, run.ID)
+		if err != nil {
+			return err
 		}
 	}
 

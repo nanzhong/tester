@@ -108,6 +108,27 @@ func (m *MemDB) ResetRun(ctx context.Context, id string) error {
 	return ErrNotFound
 }
 
+func (m *MemDB) DeleteRun(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var toDelete *int
+	for i, run := range m.Runs {
+		if run.ID == id {
+			toDelete = &i
+			break
+		}
+	}
+
+	if toDelete == nil {
+		return ErrNotFound
+	}
+
+	m.Runs = append(m.Runs[:*toDelete], m.Runs[*toDelete+1:]...)
+
+	return nil
+}
+
 func (m *MemDB) CompleteRun(ctx context.Context, id string, testIDs []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

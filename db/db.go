@@ -21,6 +21,7 @@ type DB interface {
 	EnqueueRun(ctx context.Context, run *tester.Run) error
 	StartRun(ctx context.Context, id string) error
 	ResetRun(ctx context.Context, id string) error
+	DeleteRun(ctx context.Context, id string) error
 	CompleteRun(ctx context.Context, id string, testIDs []string) error
 	ListPendingRuns(ctx context.Context) ([]*tester.Run, error)
 	ListFinishedRuns(ctx context.Context, limit int) ([]*tester.Run, error)
