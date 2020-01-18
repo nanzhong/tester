@@ -20,3 +20,5 @@ require (
 	golang.org/x/sys v0.0.0-20200107162124-548cf772de50 // indirect
 	golang.org/x/text v0.3.2 // indirect
 )
+
+replace github.com/nlopes/slack => github.com/nanzhong/slack v0.6.1-0.20200118044918-a49464de8ae8

@@ -211,32 +211,41 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 
 func (s *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 	testLink := fmt.Sprintf("%s/tests/%s", alert.BaseURL, alert.Test.ID)
+
+	messageText := slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf(":red_circle: *FAIL* - %s - %s", alert.Test.Name, testLink), false, false)
+	messageSection := slack.NewSectionBlock(messageText, nil, nil)
+	slack.NewDividerBlock()
+
+	testDetail := slack.Attachment{
+		Color:     "#ff005f",
+		Fallback:  fmt.Sprintf("%s with ID %s failed (%s).\n%s", alert.Test.Name, alert.Test.ID, alert.Test.Duration().String(), testLink),
+		Title:     alert.Test.Name,
+		TitleLink: testLink,
+		Fields: []slack.AttachmentField{
+			{
+				Title: "Test ID",
+				Value: alert.Test.ID,
+				Short: true,
+			},
+			{
+				Title: "Duration",
+				Value: alert.Test.Duration().String(),
+				Short: true,
+			},
+		},
+
+		Footer:     "tester",
+		FooterIcon: "",
+		Ts:         json.Number(strconv.FormatInt(alert.Test.FinishedAt.Unix(), 10)),
+	}
+
 	err := slack.PostWebhook(s.webhookURL, &slack.WebhookMessage{
 		Username: s.username,
+		Blocks: []slack.Block{
+			messageSection,
+		},
 		Attachments: []slack.Attachment{
-			{
-				Color:     "#ff005f",
-				Fallback:  fmt.Sprintf("%s with ID %s failed (%s).\n%s", alert.Test.Name, alert.Test.ID, alert.Test.Duration().String(), testLink),
-				Title:     alert.Test.Name,
-				TitleLink: testLink,
-				Text:      "Failure running test",
-				Fields: []slack.AttachmentField{
-					{
-						Title: "Test ID",
-						Value: alert.Test.ID,
-						Short: true,
-					},
-					{
-						Title: "Duration",
-						Value: alert.Test.Duration().String(),
-						Short: true,
-					},
-				},
-
-				Footer:     "tester",
-				FooterIcon: "",
-				Ts:         json.Number(strconv.FormatInt(alert.Test.FinishedAt.Unix(), 10)),
-			},
+			testDetail,
 		},
 	})
 	if err != nil {
