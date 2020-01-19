@@ -19,7 +19,7 @@
           <td scope="row">{{.Package.Name}}</td>
           <td scope="row">
             {{range .Package.Options}}
-            <span class="badge badge-secondary">{{.Name}}={{.Value}}</span>
+            <span class="badge badge-secondary">{{.String}}</span>
             {{end}}
           </td>
           <td><span data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">{{.EnqueuedAt | formatRelativeTime}}</span></td>
@@ -43,6 +43,7 @@
         <tr>
           <th scope="col">ID</th>
           <th scope="col">Package</th>
+          <th scope="col">Options</th>
           <th scope="col">Enqueued At</th>
           <th scope="col">Started At</th>
           <th scope="col">Finished At</th>
@@ -51,8 +52,13 @@
       <tbody>
         {{range .FinishedRuns}}
         <tr>
-          <th scope="row"><a href="/runs/{{.ID}}">{{.ID}} <i class="fas fa-link"></i></a></th>
-          <th scope="row">{{.Package.Name}}</th>
+          <td scope="row"><a href="/runs/{{.ID}}">{{.ID}} <i class="fas fa-link"></i></a></td>
+          <td scope="row">{{.Package.Name}}</td>
+          <td scope="row">
+            {{range .Package.Options}}
+            <span class="badge badge-secondary">{{.String}}</span>
+            {{end}}
+          </td>
           <td><span data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">{{.EnqueuedAt | formatRelativeTime}}</span></td>
           <td>{{if not .StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.StartedAt | formatTime}}">{{.StartedAt | formatRelativeTime}}</span>{{end}}</td>
           <td><span data-toggle="tooltip" data-placement="top" title="{{.FinishedAt | formatTime}}">{{.FinishedAt | formatRelativeTime}}</span></td>
