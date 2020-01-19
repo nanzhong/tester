@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -165,8 +166,10 @@ func (r *Runner) runOnce(ctx context.Context) error {
 
 	log.Printf("starting run for %s (%s) with options: %s", run.Package.Name, run.ID, strings.Join(runOptions, " "))
 	var (
-		testStdOut bytes.Buffer
-		testStdErr bytes.Buffer
+		stdout       bytes.Buffer
+		stderr       bytes.Buffer
+		eventStdout  bytes.Buffer
+		errorMessage string
 	)
 
 	runArgs := []string{
@@ -180,10 +183,23 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, run.Package.Path, runArgs...)
-	cmd.Stdout = &testStdOut
-	cmd.Stderr = &testStdErr
-	err = cmd.Run()
+	reader, writer := io.Pipe()
+	teeReader := io.TeeReader(reader, &stdout)
+
+	testCmd := exec.CommandContext(ctx, run.Package.Path, runArgs...)
+	testCmd.Stdout = writer
+	testCmd.Stderr = &stderr
+
+	jsonCmd := exec.CommandContext(ctx, "go", "tool", "test2json", "-t")
+	jsonCmd.Stdin = teeReader
+	jsonCmd.Stdout = &eventStdout
+	jsonCmd.Stderr = os.Stderr
+
+	testCmd.Start()
+	jsonCmd.Start()
+
+	err = testCmd.Wait()
+	writer.Close()
 	if err != nil {
 		exitErr, ok := err.(*exec.ExitError)
 		if !ok {
@@ -195,23 +211,16 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		// eg. failed tests will result in exit status 1.
 		case 1:
 		default:
-			errorMessage := fmt.Sprintf("Test run failed: %s\nExit Code: %d\nstdout:\n%s\nstderr:\n%s", exitErr.String(), exitErr.ExitCode(), testStdOut.Bytes(), testStdErr.Bytes())
-			err := r.failRun(run.ID, errorMessage)
-			if err != nil {
+			errorMessage = fmt.Sprintf("Test run failed: %s\nExit Code: %d\nstdout:\n%s\nstderr:\n%s", exitErr.String(), exitErr.ExitCode(), stdout.Bytes(), stderr.Bytes())
+			if err := r.failRun(run.ID, errorMessage); err != nil {
 				log.Printf("failed to mark run failed: %s", err)
 			}
 			return exitErr
 		}
 	}
 
-	var eventStdout bytes.Buffer
-	cmd = exec.CommandContext(ctx, "go", "tool", "test2json", "-t")
-	cmd.Stdin = &testStdOut
-	cmd.Stdout = &eventStdout
-	cmd.Stderr = os.Stdout
-	err = cmd.Run()
-	if err != nil {
-		return fmt.Errorf("parsing test/benchmark results: %w", err)
+	if err := jsonCmd.Wait(); err != nil {
+		return fmt.Errorf("parsing test output: %w", err)
 	}
 
 	eventBytes := bytes.Split(bytes.Trim(eventStdout.Bytes(), " \n"), []byte("\n"))
