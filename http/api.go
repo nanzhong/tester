@@ -48,6 +48,7 @@ func NewAPIHandler(opts ...Option) *APIHandler {
 	r.HandleFunc("/api/tests/{test_id}", LogHandlerFunc(handler.getTest)).Methods(http.MethodGet)
 	r.HandleFunc("/api/runs/claim", LogHandlerFunc(handler.claimRun)).Methods(http.MethodPost)
 	r.HandleFunc("/api/runs/{run_id}/complete", LogHandlerFunc(handler.completeRun)).Methods(http.MethodPost)
+	r.HandleFunc("/api/runs/{run_id}/fail", LogHandlerFunc(handler.failRun)).Methods(http.MethodPost)
 
 	if handler.slackApp != nil {
 		r.HandleFunc("/api/slack/command", LogHandlerFunc(handler.slackApp.HandleSlackCommand)).Methods(http.MethodPost)
@@ -174,6 +175,25 @@ func (h *APIHandler) completeRun(w http.ResponseWriter, r *http.Request) {
 	err = h.db.CompleteRun(r.Context(), mux.Vars(r)["run_id"], testIDs)
 	if err != nil {
 		log.Printf("failed to complete run: %s", err)
+		renderAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *APIHandler) failRun(w http.ResponseWriter, r *http.Request) {
+	var errorMessage string
+	err := json.NewDecoder(r.Body).Decode(&errorMessage)
+	if err != nil {
+		log.Printf("failed to parse fail run request: %s", err)
+		renderAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	err = h.db.FailRun(r.Context(), mux.Vars(r)["run_id"], errorMessage)
+	if err != nil {
+		log.Printf("failed to fail run: %s", err)
 		renderAPIError(w, http.StatusInternalServerError, err)
 		return
 	}

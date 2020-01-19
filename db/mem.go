@@ -158,6 +158,25 @@ func (m *MemDB) CompleteRun(ctx context.Context, id string, testIDs []string) er
 	return nil
 }
 
+func (m *MemDB) FailRun(ctx context.Context, id string, errorMessage string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var run *tester.Run
+	for _, r := range m.Runs {
+		if r.ID == id {
+			run = r
+		}
+	}
+	if run == nil {
+		return ErrNotFound
+	}
+
+	run.FinishedAt = time.Now()
+	run.Error = errorMessage
+	return nil
+}
+
 func (m *MemDB) ListPendingRuns(ctx context.Context) ([]*tester.Run, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

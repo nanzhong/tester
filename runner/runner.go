@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -157,36 +158,66 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		return nil
 	}
 
-	log.Printf("starting run for %s (%s)", run.Package.Name, run.ID)
-	var output bytes.Buffer
+	var runOptions []string
+	for _, option := range run.Package.Options {
+		runOptions = append(runOptions, option.String())
+	}
+
+	log.Printf("starting run for %s (%s) with options: %s", run.Package.Name, run.ID, strings.Join(runOptions, " "))
+	var (
+		testStdOut bytes.Buffer
+		testStdErr bytes.Buffer
+	)
+
 	runArgs := []string{
-		"tool",
-		"test2json",
-		"-t",
-		run.Package.Path,
 		"-test.v",
 	}
 
-	timeout := time.Duration(run.Package.DefaultTimeout) * time.Second
-	if timeout != 0 {
-		runArgs = append(runArgs, fmt.Sprintf("-test.timeout=%s", timeout.String()))
-	}
-
-	cmd := exec.CommandContext(ctx, "go", runArgs...)
-	cmd.Stdout = &output
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-	if err != nil {
-		// non 0 exit statuses are okay.
-		// eg. failed tests will result in exit status 1.
-		if _, ok := err.(*exec.ExitError); !ok {
-			return fmt.Errorf("running test/benchmark: %w", err)
+	for _, option := range run.Package.Options {
+		runArgs = append(runArgs, fmt.Sprintf("-%s", option.Name))
+		if option.Value != "" {
+			runArgs = append(runArgs, fmt.Sprintf("%s", option.Value))
 		}
 	}
 
-	eventBytes := bytes.Split(bytes.Trim(output.Bytes(), " \n"), []byte("\n"))
+	cmd := exec.CommandContext(ctx, run.Package.Path, runArgs...)
+	cmd.Stdout = &testStdOut
+	cmd.Stderr = &testStdErr
+	err = cmd.Run()
+	if err != nil {
+		exitErr, ok := err.(*exec.ExitError)
+		if !ok {
+			return fmt.Errorf("running test/benchmark: %w", err)
+		}
+
+		switch exitErr.ExitCode() {
+		// non 0 exit statuses are okay.
+		// eg. failed tests will result in exit status 1.
+		case 1:
+		default:
+			errorMessage := fmt.Sprintf("Test run failed: %s\nExit Code: %d\nstdout:\n%s\nstderr:\n%s", exitErr.String(), exitErr.ExitCode(), testStdOut.Bytes(), testStdErr.Bytes())
+			err := r.failRun(run.ID, errorMessage)
+			if err != nil {
+				log.Printf("failed to mark run failed: %s", err)
+			}
+			return exitErr
+		}
+	}
+
+	var eventStdout bytes.Buffer
+	cmd = exec.CommandContext(ctx, "go", "tool", "test2json", "-t")
+	cmd.Stdin = &testStdOut
+	cmd.Stdout = &eventStdout
+	cmd.Stderr = os.Stdout
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("parsing test/benchmark results: %w", err)
+	}
+
+	eventBytes := bytes.Split(bytes.Trim(eventStdout.Bytes(), " \n"), []byte("\n"))
 	var events []*testEvent
 	for _, eventData := range eventBytes {
+		fmt.Printf("%s\n", eventData)
 		var event testEvent
 		err := json.Unmarshal(eventData, &event)
 		if err != nil {
@@ -245,6 +276,36 @@ func (r *Runner) submitTestResult(test *tester.Test, run *tester.Run) error {
 		return fmt.Errorf("submitting test: %w", err)
 	}
 	if resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("received unexpected status code: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (r *Runner) failRun(runID string, errorMessage string) error {
+	log.Printf("failing run")
+	jsonError, err := json.Marshal(errorMessage)
+	if err != nil {
+		return fmt.Errorf("marshaling error message: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), resultSubmissionTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		fmt.Sprintf("%s/api/runs/%s/fail", r.testerAddr, runID),
+		bytes.NewBuffer(jsonError),
+	)
+	if err != nil {
+		return fmt.Errorf("constructing request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failing run: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("received unexpected status code: %d", resp.StatusCode)
 	}
 	return nil

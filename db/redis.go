@@ -236,6 +236,38 @@ func (r *Redis) CompleteRun(ctx context.Context, id string, testIDs []string) er
 	return nil
 }
 
+func (r *Redis) FailRun(ctx context.Context, id string, errorMessage string) error {
+	runJSON, err := r.client.Get(redisKeyRun(id)).Result()
+	if err != nil {
+		return fmt.Errorf("getting run to fail: %w", err)
+	}
+
+	var run tester.Run
+	err = json.Unmarshal([]byte(runJSON), &run)
+	if err != nil {
+		return fmt.Errorf("deserializing run: %w", err)
+	}
+
+	run.FinishedAt = time.Now()
+	run.Error = errorMessage
+
+	runJSONBytes, err := json.Marshal(&run)
+	if err != nil {
+		return fmt.Errorf("serializing run: %w", err)
+	}
+
+	_, err = r.client.TxPipelined(func(tx redis.Pipeliner) error {
+		tx.LRem(redisKeyRun(redisKeyRunPending), 1, redisKeyRun(id))
+		tx.Set(redisKeyRun(id), string(runJSONBytes), redisRunRetentionPeriod).Err()
+		tx.LPush(redisKeyRun(redisKeyRunFinished), redisKeyRun(id))
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failing run: %w", err)
+	}
+	return nil
+}
+
 func (r *Redis) ListPendingRuns(ctx context.Context) ([]*tester.Run, error) {
 	runs, err := r.listRuns(ctx, redisKeyRun(redisKeyRunPending), 0)
 	if err != nil {

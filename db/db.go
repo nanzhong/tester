@@ -23,6 +23,7 @@ type DB interface {
 	ResetRun(ctx context.Context, id string) error
 	DeleteRun(ctx context.Context, id string) error
 	CompleteRun(ctx context.Context, id string, testIDs []string) error
+	FailRun(ctx context.Context, id string, error string) error
 	ListPendingRuns(ctx context.Context) ([]*tester.Run, error)
 	ListFinishedRuns(ctx context.Context, limit int) ([]*tester.Run, error)
 	GetRun(ctx context.Context, id string) (*tester.Run, error)

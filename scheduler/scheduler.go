@@ -14,24 +14,25 @@ import (
 )
 
 type options struct {
-	db       db.DB
-	runDelay time.Duration
+	runTimeout time.Duration
+	runDelay   time.Duration
 }
 
 // Option is used to inject dependencies into a Scheduler on creation.
 type Option func(*options)
 
-// WithDB allows configuring a DB.
-func WithDB(db db.DB) Option {
-	return func(opts *options) {
-		opts.db = db
-	}
-}
-
-// With RunDelay allows configuring a minimum delay between runs of a package.
+// WithRunDelay allows configuring a minimum delay between runs of a package.
 func WithRunDelay(d time.Duration) Option {
 	return func(opts *options) {
 		opts.runDelay = d
+	}
+}
+
+// WithRunTimeout allows configuring a maximum timeout before runs are deemed
+// stale and reset.
+func WithRunTimeout(d time.Duration) Option {
+	return func(opts *options) {
+		opts.runTimeout = d
 	}
 }
 
@@ -42,13 +43,15 @@ type Scheduler struct {
 	stop            chan struct{}
 	lastScheduledAt map[string]time.Time
 	runDelay        time.Duration
+	runTimeout      time.Duration
 	db              db.DB
 }
 
 // NewScheduler constructs a new scheduler.
-func NewScheduler(packages []tester.Package, opts ...Option) *Scheduler {
+func NewScheduler(db db.DB, packages []tester.Package, opts ...Option) *Scheduler {
 	defOpts := &options{
-		runDelay: 5 * time.Minute,
+		runDelay:   5 * time.Minute,
+		runTimeout: 15 * time.Minute,
 	}
 
 	for _, opt := range opts {
@@ -57,8 +60,9 @@ func NewScheduler(packages []tester.Package, opts ...Option) *Scheduler {
 
 	return &Scheduler{
 		stop:            make(chan struct{}),
-		db:              defOpts.db,
+		db:              db,
 		runDelay:        defOpts.runDelay,
+		runTimeout:      defOpts.runTimeout,
 		lastScheduledAt: make(map[string]time.Time),
 		Packages:        packages,
 	}
@@ -151,9 +155,19 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 				continue
 			}
 
+			runPkg := pkg
+			runPkg.Options = nil
+			for _, option := range pkg.Options {
+				if option.Default != "" {
+					runPkg.Options = append(runPkg.Options, tester.Option{
+						Name:  option.Name,
+						Value: option.Default,
+					})
+				}
+			}
 			err = s.db.EnqueueRun(ctx, &tester.Run{
 				ID:         uuid.New().String(),
-				Package:    pkg,
+				Package:    runPkg,
 				EnqueuedAt: time.Now(),
 			})
 			s.lastScheduledAt[pkg.Name] = time.Now()
@@ -197,12 +211,7 @@ func (s *Scheduler) resetStaleRuns(ctx context.Context) error {
 			continue
 		}
 
-		timeout := time.Duration(run.Package.DefaultTimeout) * time.Second
-		if timeout == 0 {
-			timeout = 15 * time.Minute
-		}
-
-		if time.Now().Sub(run.StartedAt) > timeout {
+		if time.Now().Sub(run.StartedAt) > s.runTimeout {
 			err = s.db.ResetRun(ctx, run.ID)
 			if err != nil {
 				return err

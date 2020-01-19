@@ -64,7 +64,17 @@ var serveCmd = &cobra.Command{
 		httpOpts = append(httpOpts, testerhttp.WithDB(dbStore))
 
 		log.Print("configuring scheduler")
-		scheduler := scheduler.NewScheduler(cfg.Packages, scheduler.WithDB(dbStore))
+		var schedulerOpts []scheduler.Option
+		if cfg.Scheduler != nil {
+			if cfg.Scheduler.RunTimeout != "" {
+				timeout, err := time.ParseDuration(cfg.Scheduler.RunTimeout)
+				if err != nil {
+					log.Fatal("invalid run timeout: %s", cfg.Scheduler.RunTimeout)
+				}
+				schedulerOpts = append(schedulerOpts, scheduler.WithRunTimeout(timeout))
+			}
+		}
+		scheduler := scheduler.NewScheduler(dbStore, cfg.Packages)
 
 		log.Print("configuring alert manager")
 		var (

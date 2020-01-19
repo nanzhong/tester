@@ -212,7 +212,7 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 func (s *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 	testLink := fmt.Sprintf("%s/tests/%s", alert.BaseURL, alert.Test.ID)
 
-	messageText := slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf(":red_circle: *FAIL* - %s - %s", alert.Test.Name, testLink), false, false)
+	messageText := slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf(":warning: *FAIL* - %s - %s", alert.Test.Name, testLink), false, false)
 	messageSection := slack.NewSectionBlock(messageText, nil, nil)
 	slack.NewDividerBlock()
 

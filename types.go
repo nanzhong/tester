@@ -1,6 +1,7 @@
 package tester
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -17,6 +18,7 @@ const (
 	TBSkipped
 )
 
+// String is the human readable representation of the state.
 func (s TBState) String() string {
 	switch s {
 	case TBPassed:
@@ -73,12 +75,25 @@ type Run struct {
 	StartedAt  time.Time `json:"started_at"`
 	FinishedAt time.Time `json:"finished_at"`
 	Tests      []*Test   `json:"tests"`
+	Error      string    `json:"error"`
 }
 
 // Package represents a go package that can be tested or benchmarked.
 type Package struct {
-	Name           string              `json:"name"`
-	Path           string              `json:"path"`
-	DefaultTimeout int                 `json:"default_timeout"`
-	Options        map[string][]string `json:"options"`
+	Name    string   `json:"name"`
+	Path    string   `json:"path"`
+	Options []Option `json:"options"`
+}
+
+// Option represents an option for how a package can be run.
+type Option struct {
+	Name        string `json:"name"`
+	Value       string `json:"value"`
+	Description string `json:"description"`
+	Default     string `json:"default"`
+}
+
+// String returns a string representation of the option.
+func (o *Option) String() string {
+	return fmt.Sprintf("-%s=%s", o.Name, o.Value)
 }
