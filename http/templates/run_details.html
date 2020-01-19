@@ -5,14 +5,14 @@
   </ol>
 </nav>
 
-{{if .Run.FinishedAt}}
+{{if .Run.FinishedAt.IsZero}}
+<h3>Run pending</h3>
+{{else}}
 {{if .Run.Error}}
 <h3>Run failed</h3>
 {{else}}
 <h3>Run completed</h3>
 {{end}}
-{{else}}
-<h3>Run pending</h3>
 {{end}}
 
 <table class="table table-sm test">
@@ -38,7 +38,9 @@
   </tbody>
 </table>
 
-{{if .Run.FinishedAt}}
+{{if .Run.FinishedAt.IsZero}}
+<p>Awaiting results...</p>
+{{else}}
 {{if .Run.Error}}
 <pre><code>{{.Run.Error}}</code></pre>
 {{else}}
@@ -57,6 +59,4 @@
 </div>
 {{end}}
 {{end}}
-{{else}}
-<p>Awaiting results...</p>
 {{end}}
