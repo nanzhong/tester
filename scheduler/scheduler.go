@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -68,7 +69,7 @@ func NewScheduler(db db.DB, packages []tester.Package, opts ...Option) *Schedule
 	}
 }
 
-func (s *Scheduler) Schedule(ctx context.Context, packageName string) (*tester.Run, error) {
+func (s *Scheduler) Schedule(ctx context.Context, packageName string, args ...string) (*tester.Run, error) {
 	var pkg *tester.Package
 	for _, p := range s.Packages {
 		if p.Name == packageName {
@@ -79,18 +80,38 @@ func (s *Scheduler) Schedule(ctx context.Context, packageName string) (*tester.R
 	if pkg == nil {
 		return nil, fmt.Errorf("unknown package: %s", packageName)
 	}
+	runPkg := *pkg
+
+	fs := flag.NewFlagSet(packageName, flag.ContinueOnError)
+	runPkgOptions := map[string]*string{}
+	for _, option := range pkg.Options {
+		runPkgOptions[option.Name] = fs.String(option.Name, option.Default, option.Description)
+	}
+	err := fs.Parse(args)
+	if err != nil {
+		return nil, fmt.Errorf("parsing run options: %w", err)
+	}
+
+	runPkg.Options = nil
+	for _, option := range pkg.Options {
+		if value, set := runPkgOptions[option.Name]; set && value != nil && *value != "" {
+			runOption := option
+			runOption.Value = *value
+			runPkg.Options = append(runPkg.Options, runOption)
+		}
+	}
 
 	run := &tester.Run{
 		ID:         uuid.New().String(),
-		Package:    *pkg,
+		Package:    runPkg,
 		EnqueuedAt: time.Now(),
 	}
-	err := s.db.EnqueueRun(ctx, run)
+	err = s.db.EnqueueRun(ctx, run)
 	if err != nil {
 		return nil, fmt.Errorf("scheduling package: %w", err)
 	}
 
-	log.Printf("scheduled run %s", pkg.Name)
+	log.Printf("scheduled run %s", runPkg.Name)
 	return run, nil
 }
 
@@ -151,7 +172,7 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 	for _, pkg := range packagesToRun {
 		if _, exists := pendingRuns[pkg.Name]; !exists {
 			last, ran := s.lastScheduledAt[pkg.Name]
-			if ran && time.Now().Sub(last) < s.runDelay {
+			if ran && time.Since(last) < s.runDelay {
 				continue
 			}
 

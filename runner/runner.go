@@ -217,7 +217,6 @@ func (r *Runner) runOnce(ctx context.Context) error {
 	eventBytes := bytes.Split(bytes.Trim(eventStdout.Bytes(), " \n"), []byte("\n"))
 	var events []*testEvent
 	for _, eventData := range eventBytes {
-		fmt.Printf("%s\n", eventData)
 		var event testEvent
 		err := json.Unmarshal(eventData, &event)
 		if err != nil {
