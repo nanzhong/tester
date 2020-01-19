@@ -232,6 +232,7 @@ func (r *Runner) runOnce(ctx context.Context) error {
 
 	var testIDs []string
 	for _, test := range tests {
+		test.Package = run.Package
 		log.Printf("Test: %s - %s - %s", test.Name, test.State.String(), test.Duration().String())
 		testIDs = append(testIDs, test.ID)
 		if r.testerAddr != "" {

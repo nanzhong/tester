@@ -52,7 +52,7 @@ func (c *TBCommon) OutputString() string {
 
 // Test is the representation of a `testing.T`.
 type Test struct {
-	Package *Package `json:"package"`
+	Package Package `json:"package"`
 
 	TBCommon
 	SubTests []*Test `json:"sub_tests,omitempty"`

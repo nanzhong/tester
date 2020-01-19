@@ -157,10 +157,6 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 	messageText := slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf(":traffic_light:  *NEW* - Started new test run for package %s\n%s", packageName, runURL), false, false)
 	messageSection := slack.NewSectionBlock(messageText, nil, nil)
 
-	var options []string
-	for _, option := range run.Package.Options {
-		options = append(options, fmt.Sprintf("`%s`", option.String()))
-	}
 	runDetail := slack.Attachment{
 		Color:     "#80cee1",
 		Title:     run.Package.Name,
@@ -170,15 +166,22 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 				Title: "Run ID",
 				Value: run.ID,
 			},
-			{
-				Title: "Options",
-				Value: strings.Join(options, "\n"),
-			},
 		},
 
 		Footer:     "tester",
 		FooterIcon: "",
 		Ts:         json.Number(strconv.FormatInt(run.EnqueuedAt.Unix(), 10)),
+	}
+
+	var options []string
+	for _, option := range run.Package.Options {
+		options = append(options, fmt.Sprintf("`%s`", option.String()))
+	}
+	if len(options) > 0 {
+		runDetail.Fields = append(runDetail.Fields, slack.AttachmentField{
+			Title: "Options",
+			Value: strings.Join(options, "\n"),
+		})
 	}
 
 	message := slack.NewBlockMessage(
@@ -216,6 +219,17 @@ func (s *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 		Footer:     "tester",
 		FooterIcon: "",
 		Ts:         json.Number(strconv.FormatInt(alert.Test.FinishedAt.Unix(), 10)),
+	}
+
+	var options []string
+	for _, option := range alert.Test.Package.Options {
+		options = append(options, fmt.Sprintf("`%s`", option.String()))
+	}
+	if len(options) > 0 {
+		testDetail.Fields = append(testDetail.Fields, slack.AttachmentField{
+			Title: "Options",
+			Value: strings.Join(options, "\n"),
+		})
 	}
 
 	err := slack.PostWebhook(s.webhookURL, &slack.WebhookMessage{
