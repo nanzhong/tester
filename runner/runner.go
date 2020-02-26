@@ -38,6 +38,7 @@ type tbRunner struct {
 
 type options struct {
 	testerAddr string
+	apiKey     string
 }
 
 // Option is used to inject dependencies into a Server on creation.
@@ -50,9 +51,17 @@ func WithTesterAddr(addr string) Option {
 	}
 }
 
+// WithAPIKey allows configuring an api key for authentication.
+func WithAPIKey(key string) Option {
+	return func(opts *options) {
+		opts.apiKey = key
+	}
+}
+
 // Runner is the implementation of the test runner.
 type Runner struct {
 	testerAddr string
+	apiKey     string
 	packages   []tester.Package
 
 	stop     chan struct{}
@@ -71,6 +80,7 @@ func New(packages []tester.Package, opts ...Option) *Runner {
 
 	return &Runner{
 		testerAddr: defOpts.testerAddr,
+		apiKey:     defOpts.apiKey,
 		packages:   packages,
 
 		stop:     make(chan struct{}),
@@ -127,6 +137,7 @@ func (r *Runner) claimRun(ctx context.Context) (*tester.Run, error) {
 	if err != nil {
 		return nil, fmt.Errorf("constructing claim request: %w", err)
 	}
+	r.authAPIRequest(req)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -278,6 +289,7 @@ func (r *Runner) submitTestResult(test *tester.Test, run *tester.Run) error {
 	if err != nil {
 		return fmt.Errorf("constructing request: %w", err)
 	}
+	r.authAPIRequest(req)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -308,6 +320,7 @@ func (r *Runner) failRun(runID string, errorMessage string) error {
 	if err != nil {
 		return fmt.Errorf("constructing request: %w", err)
 	}
+	r.authAPIRequest(req)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -337,6 +350,7 @@ func (r *Runner) completeRun(runID string, testIDs []string) error {
 	if err != nil {
 		return fmt.Errorf("constructing request: %w", err)
 	}
+	r.authAPIRequest(req)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -347,6 +361,20 @@ func (r *Runner) completeRun(runID string, testIDs []string) error {
 		return fmt.Errorf("received unexpected status code: %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (r *Runner) authAPIRequest(req *http.Request) {
+	if r.apiKey == "" {
+		return
+	}
+
+	// TODO make this configurable
+	name, err := os.Hostname()
+	// If getting hostname fails, use the generic "runner" name.
+	if err != nil {
+		name = "runner"
+	}
+	req.SetBasicAuth(name, r.apiKey)
 }
 
 func processEvents(events []*testEvent) ([]*tester.Test, []*tester.Benchmark, error) {

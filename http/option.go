@@ -13,6 +13,7 @@ type options struct {
 	db           db.DB
 	alertManager *alerting.AlertManager
 	slackApp     *slack.App
+	apiKey       string
 }
 
 // WithDB allows configuring a DB.
@@ -33,5 +34,12 @@ func WithAlertManager(am *alerting.AlertManager) Option {
 func WithSlackApp(app *slack.App) Option {
 	return func(opts *options) {
 		opts.slackApp = app
+	}
+}
+
+// WithAPIKey allows configuring a symmetric key for api auth.
+func WithAPIKey(key string) Option {
+	return func(opts *options) {
+		opts.apiKey = key
 	}
 }
