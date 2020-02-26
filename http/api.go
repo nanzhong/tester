@@ -23,6 +23,7 @@ type APIHandler struct {
 	db           db.DB
 	alertManager *alerting.AlertManager
 	slackApp     *slack.App
+	apiKey       string
 }
 
 // NewAPIHandler constructs a new `APIHandler`.
@@ -40,9 +41,15 @@ func NewAPIHandler(opts ...Option) *APIHandler {
 		db:           defOpts.db,
 		alertManager: defOpts.alertManager,
 		slackApp:     defOpts.slackApp,
+		apiKey:       defOpts.apiKey,
 	}
 
 	r := mux.NewRouter()
+
+	if handler.apiKey != "" {
+		r.Use(handler.ensureAuth)
+	}
+
 	r.HandleFunc("/api/tests", LogHandlerFunc(handler.submitTest)).Methods(http.MethodPost)
 	r.HandleFunc("/api/tests", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
 	r.HandleFunc("/api/tests/{test_id}", LogHandlerFunc(handler.getTest)).Methods(http.MethodGet)
@@ -199,6 +206,17 @@ func (h *APIHandler) failRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *APIHandler) ensureAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, password, ok := r.BasicAuth()
+		if !ok || password != h.apiKey {
+			renderAPIError(w, http.StatusUnauthorized, fmt.Errorf("user %s is unauthorized", username))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func renderAPIError(w http.ResponseWriter, status int, err error) {

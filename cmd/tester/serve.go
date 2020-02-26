@@ -63,13 +63,17 @@ var serveCmd = &cobra.Command{
 		}
 		httpOpts = append(httpOpts, testerhttp.WithDB(dbStore))
 
+		if apiKey := viper.GetString("serve-api-key"); apiKey != "" {
+			httpOpts = append(httpOpts, testerhttp.WithAPIKey(apiKey))
+		}
+
 		log.Print("configuring scheduler")
 		var schedulerOpts []scheduler.Option
 		if cfg.Scheduler != nil {
 			if cfg.Scheduler.RunTimeout != "" {
 				timeout, err := time.ParseDuration(cfg.Scheduler.RunTimeout)
 				if err != nil {
-					log.Fatal("invalid run timeout: %s", cfg.Scheduler.RunTimeout)
+					log.Fatalf("invalid run timeout: %s", cfg.Scheduler.RunTimeout)
 				}
 				schedulerOpts = append(schedulerOpts, scheduler.WithRunTimeout(timeout))
 			}
@@ -195,6 +199,9 @@ func init() {
 
 	serveCmd.Flags().String("redis-url", "", "The url string of redis")
 	viper.BindPFlag("serve-redis-url", serveCmd.Flags().Lookup("redis-url"))
+
+	serveCmd.Flags().String("api-key", "", "Symmetric key for API Auth")
+	viper.BindPFlag("serve-api-key", serveCmd.Flags().Lookup("api-key"))
 
 	serveCmd.Flags().String("okta-session-key", "", "Okta session key")
 	viper.BindPFlag("serve-okta-session-key", serveCmd.Flags().Lookup("okta-session-key"))

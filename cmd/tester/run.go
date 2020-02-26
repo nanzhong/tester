@@ -33,7 +33,12 @@ var runCmd = &cobra.Command{
 			log.Fatalf("failed to parse config (%s): %s", configPath, err)
 		}
 
-		runner := runner.New(cfg.Packages, runner.WithTesterAddr(viper.GetString("run-tester-addr")))
+		opts := []runner.Option{runner.WithTesterAddr(viper.GetString("run-tester-addr"))}
+		if apiKey := viper.GetString("run-api-key"); apiKey != "" {
+			opts = append(opts, runner.WithAPIKey(apiKey))
+		}
+
+		runner := runner.New(cfg.Packages, opts...)
 
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
@@ -64,4 +69,7 @@ func init() {
 
 	runCmd.Flags().String("tester-addr", "http://0.0.0.0:8080", "The address where the tester server is listening on")
 	viper.BindPFlag("run-tester-addr", runCmd.Flags().Lookup("tester-addr"))
+
+	runCmd.Flags().String("api-key", "", "Symmetric key for API Auth")
+	viper.BindPFlag("run-api-key", runCmd.Flags().Lookup("api-key"))
 }
