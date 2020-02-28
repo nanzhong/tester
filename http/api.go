@@ -46,20 +46,20 @@ func NewAPIHandler(opts ...Option) *APIHandler {
 
 	r := mux.NewRouter()
 
-	if handler.apiKey != "" {
-		r.Use(handler.ensureAuth)
-	}
-
-	r.HandleFunc("/api/tests", LogHandlerFunc(handler.submitTest)).Methods(http.MethodPost)
-	r.HandleFunc("/api/tests", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
-	r.HandleFunc("/api/tests/{test_id}", LogHandlerFunc(handler.getTest)).Methods(http.MethodGet)
-	r.HandleFunc("/api/runs/claim", LogHandlerFunc(handler.claimRun)).Methods(http.MethodPost)
-	r.HandleFunc("/api/runs/{run_id}/complete", LogHandlerFunc(handler.completeRun)).Methods(http.MethodPost)
-	r.HandleFunc("/api/runs/{run_id}/fail", LogHandlerFunc(handler.failRun)).Methods(http.MethodPost)
-
 	if handler.slackApp != nil {
 		r.HandleFunc("/api/slack/command", LogHandlerFunc(handler.slackApp.HandleSlackCommand)).Methods(http.MethodPost)
 	}
+
+	ar := r.PathPrefix("/api").Subrouter()
+	if handler.apiKey != "" {
+		ar.Use(handler.ensureAuth)
+	}
+	ar.HandleFunc("/tests", LogHandlerFunc(handler.submitTest)).Methods(http.MethodPost)
+	ar.HandleFunc("/tests", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
+	ar.HandleFunc("/tests/{test_id}", LogHandlerFunc(handler.getTest)).Methods(http.MethodGet)
+	ar.HandleFunc("/runs/claim", LogHandlerFunc(handler.claimRun)).Methods(http.MethodPost)
+	ar.HandleFunc("/runs/{run_id}/complete", LogHandlerFunc(handler.completeRun)).Methods(http.MethodPost)
+	ar.HandleFunc("/runs/{run_id}/fail", LogHandlerFunc(handler.failRun)).Methods(http.MethodPost)
 
 	handler.Handler = r
 
