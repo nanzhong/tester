@@ -170,9 +170,13 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 	})
 
 	for _, pkg := range packagesToRun {
+		runDelay := s.runDelay
+		if pkg.RunDelay > 0 {
+			runDelay = pkg.RunDelay
+		}
 		if _, exists := pendingRuns[pkg.Name]; !exists {
 			last, ran := s.lastScheduledAt[pkg.Name]
-			if ran && time.Since(last) < s.runDelay {
+			if ran && time.Since(last) < runDelay {
 				continue
 			}
 
