@@ -9,7 +9,7 @@ require (
 	github.com/gorilla/sessions v1.2.0
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/lestrrat-go/jwx v0.9.0 // indirect
-	github.com/markbates/pkger v0.14.0
+	github.com/markbates/pkger v0.17.0
 	github.com/nlopes/slack v0.6.0
 	github.com/okta/okta-jwt-verifier-golang v0.1.0
 	github.com/prometheus/client_golang v1.1.1-0.20191012124942-3ddc3cfbe565

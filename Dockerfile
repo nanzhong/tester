@@ -1,3 +1,7 @@
-FROM golang:1.14.4
+FROM golang:1.14.4 AS build
+COPY . /tester
+WORKDIR /tester
+RUN make build
 
-COPY ./dist/tester-linux-amd64 /bin/tester
+FROM golang:1.14.4
+COPY --from=build /tester/dist/tester-linux-amd64 /bin/tester

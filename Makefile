@@ -9,22 +9,27 @@ clean:
 	rm -rf dist
 	rm -rf ./cmd/tester/pkged.go
 
-.PHONY: install
-install:
-	pkger -o ./cmd/tester
-	go install ./cmd/tester/...
+.PHONY: deps
+deps:
+	go get github.com/markbates/pkger/cmd/pkger
 
-.PHONY: tester
-tester:
+.PHONY: build
+build: deps
 	pkger -o ./cmd/tester
 	GOOS=linux GOARCH=amd64 go build -o ./dist/tester-linux-amd64 ./cmd/tester/...
+
+.PHONY: build-image
+build-image:
 	docker build -t $(IMAGE_NAME):$(COMMIT) .
 ifdef LATEST
 	docker tag $(IMAGE_NAME):$(COMMIT) $(IMAGE_NAME):latest
 endif
 ifdef PUSH
 	docker push $(IMAGE_NAME):$(COMMIT)
-ifdef LATEST
 	docker push $(IMAGE_NAME):latest
 endif
-endif
+
+.PHONY: install
+install: deps
+	pkger -o ./cmd/tester
+	go install ./cmd/tester/...
