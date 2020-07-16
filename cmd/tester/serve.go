@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -12,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/nanzhong/tester/alerting"
 	"github.com/nanzhong/tester/db"
 	testerhttp "github.com/nanzhong/tester/http"
@@ -49,20 +48,19 @@ var serveCmd = &cobra.Command{
 			log.Fatalf("failed to listen on %s", viper.GetString("serve-addr"))
 		}
 
-		var httpOpts []testerhttp.Option
-		var dbStore db.DB
-		if viper.GetString("serve-redis-url") != "" {
-			log.Printf("configuring redis backend")
-			dbStore, err = configureRedis()
-			if err != nil {
-				log.Fatal("failed to configure redis: %w", err)
-			}
-		} else {
-			log.Printf("configuring memory backend")
-			dbStore = &db.MemDB{}
+		pool, err := pgxpool.Connect(context.Background(), viper.GetString("serve-pg-dsn"))
+		if err != nil {
+			log.Fatalf("failed to connect to db at %s: %s", viper.GetString("serve-addr"), err)
 		}
-		httpOpts = append(httpOpts, testerhttp.WithDB(dbStore))
+		defer pool.Close()
 
+		dbStore := db.NewPG(pool)
+		err = dbStore.Init(context.Background())
+		if err != nil {
+			log.Fatalf("failed to init db: %s", err)
+		}
+
+		var httpOpts []testerhttp.Option
 		if apiKey := viper.GetString("serve-api-key"); apiKey != "" {
 			httpOpts = append(httpOpts, testerhttp.WithAPIKey(apiKey))
 		}
@@ -104,13 +102,13 @@ var serveCmd = &cobra.Command{
 			if cfg.Slack.SigningSecret != "" {
 				opts = append(opts, slack.WithSigningSecret(cfg.Slack.SigningSecret))
 			}
-			slackApp = slack.NewApp(opts...)
+			slackApp = slack.NewApp(cfg.Packages, opts...)
 			alertManager.RegisterAlerter(slackApp)
 			httpOpts = append(httpOpts, testerhttp.WithSlackApp(slackApp))
 		}
 
-		uiHandler := testerhttp.NewUIHandler(httpOpts...)
-		apiHandler := testerhttp.NewAPIHandler(httpOpts...)
+		uiHandler := testerhttp.NewUIHandler(dbStore, cfg.Packages)
+		apiHandler := testerhttp.NewAPIHandler(dbStore, httpOpts...)
 
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())
@@ -168,20 +166,6 @@ var serveCmd = &cobra.Command{
 			scheduler.Run()
 			return nil
 		})
-		eg.Go(func() error {
-			ticker := time.NewTicker(15 * time.Second)
-			for {
-				select {
-				case <-done:
-					return nil
-				case <-ticker.C:
-					err := dbStore.Archive(context.Background())
-					if err != nil {
-						log.Printf("failed to archive results: %w", err)
-					}
-				}
-			}
-		})
 		err = eg.Wait()
 		log.Printf("server ended: %s", err)
 	},
@@ -197,8 +181,8 @@ func init() {
 	serveCmd.Flags().String("base-url", "http://0.0.0.0:8080", "The base url to use for constructing link urls")
 	viper.BindPFlag("serve-base-url", serveCmd.Flags().Lookup("base-url"))
 
-	serveCmd.Flags().String("redis-url", "", "The url string of redis")
-	viper.BindPFlag("serve-redis-url", serveCmd.Flags().Lookup("redis-url"))
+	serveCmd.Flags().String("pg-dsn", "", "The postgresql dsn to use.")
+	viper.BindPFlag("serve-pg-dsn", serveCmd.Flags().Lookup("pg-dsn"))
 
 	serveCmd.Flags().String("api-key", "", "Symmetric key for API Auth")
 	viper.BindPFlag("serve-api-key", serveCmd.Flags().Lookup("api-key"))
@@ -213,23 +197,6 @@ func init() {
 	viper.BindPFlag("serve-okta-issuer", serveCmd.Flags().Lookup("okta-issuer"))
 	serveCmd.Flags().String("okta-redirect-uri", "", "Okta redirect URI")
 	viper.BindPFlag("serve-okta-redirect-uri", serveCmd.Flags().Lookup("okta-redirect-uri"))
-}
-
-func configureRedis() (db.DB, error) {
-	redisURL := viper.GetString("serve-redis-url")
-
-	opt, err := redis.ParseURL(redisURL)
-	if err != nil {
-		return nil, err
-	}
-
-	redisClient := redis.NewClient(opt)
-
-	_, err = redisClient.Ping().Result()
-	if err != nil {
-		return nil, fmt.Errorf("verifying redis connectivity: %w", err)
-	}
-	return db.NewRedis(redisClient), nil
 }
 
 func configureOktaAuth(errorWriter func(w http.ResponseWriter, r *http.Request, err error, status int)) *okta.AuthHandler {

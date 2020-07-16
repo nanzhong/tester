@@ -1,7 +1,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb">
     <li class="breadcrumb-item"><a href="/tests">Tests</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{.Test.Name}} - {{.Test.ID}}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{.Test.Result.Name}} - {{.Test.ID}}</li>
   </ol>
 </nav>
 
@@ -10,8 +10,8 @@
     {{template "test_card" .Test}}
   </div>
   <div class="col-lg-8">
-    {{if .Test.OutputString}}
-    <pre><code>{{.Test.OutputString}}</code></pre>
+    {{if .Test.Logs}}
+    <pre><code>{{.Test.Logs | formatLogs}}</code></pre>
     {{else}}
     <p>No logs received yet...</p>
     {{end}}

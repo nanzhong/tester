@@ -1,0 +1,46 @@
+{{define "run_card"}}
+<div class="card h-100">
+  <div class="card-header p-1 pl-2 pr-2" style="font-size: 75%;">
+    <div class="d-flex">
+      <div class="flex-grow-1">
+        <a href="/runs/{{.ID}}">Run Details</a>
+      </div>
+      <div>
+        <span class="badge bg-info">{{runState .}}</span>
+      </div>
+    </div>
+  </div>
+  <div class="card-body p-1 pl-2 pr-2">
+    {{if or (eq (runState .) "passed") (eq (runState .) "failed")}}
+    <div class="progress" style="width: 100%;">
+
+      <div class="progress-bar bg-success" role="progressbar" style="width: {{. | runTestsPassedPercent}}%">{{. | runTestsPassedPercent}}%</div>
+      <div class="progress-bar bg-warning" role="progressbar" style="width: {{. | runTestsSkippedPercent}}%">{{. | runTestsSkippedPercent}}%</div>
+      <div class="progress-bar bg-danger" role="progressbar" style="width: {{. |runTestsFailedPercent}}%">{{. | runTestsFailedPercent}}%</div>
+    </div>
+    {{else}}
+    <div class="d-flex justify-content-center">
+      <div class="spinner-border spinner-border-sm text-primary" role="status">
+        <span class="sr-only">Pending...</span>
+      </div>
+    </div>
+    {{end}}
+  </div>
+  <div class="card-footer p-1 pl-2 pr-2" style="font-size: 75%;">
+    <div class="d-flex">
+      <div class="flex-grow-1">
+        {{if ne (runState .) "pending"}}
+        <small class="text-muted" data-toggle="tooltip" data-placement="top" title="{{.StartedAt | formatTime}}">Started {{.StartedAt | formatRelativeTime}}</small>
+        {{else}}
+        <small class="text-muted" data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">Enqueued {{.EnqueuedAt | formatRelativeTime}}</small>
+        {{end}}
+      </div>
+      <div>
+        {{if or (eq (runState .) "passed") (eq (runState .) "failed")}}
+        <small class="text-muted">{{.Duration | formatDuration}}</small>
+        {{end}}
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

@@ -1,8 +1,9 @@
-IMAGE_NAME ?= nanzhong/tester
-COMMIT ?= $(shell git rev-parse HEAD)
+SHELL := /bin/bash
 
-.PHONY: all
-all: tester
+commit ?= $(shell git rev-parse --short HEAD)
+image := nanzhong/tester
+
+include ./dev/dev.mk
 
 .PHONY: clean
 clean:
@@ -20,13 +21,13 @@ build: deps
 
 .PHONY: build-image
 build-image:
-	docker build -t $(IMAGE_NAME):$(COMMIT) .
+	docker build -t $(image):$(commit) .
 ifdef LATEST
-	docker tag $(IMAGE_NAME):$(COMMIT) $(IMAGE_NAME):latest
+	docker tag $(image):$(commit) $(image):latest
 endif
 ifdef PUSH
-	docker push $(IMAGE_NAME):$(COMMIT)
-	docker push $(IMAGE_NAME):latest
+	docker push $(image):$(commit)
+	docker push $(image):latest
 endif
 
 .PHONY: install

@@ -102,8 +102,8 @@ func (s *Scheduler) Schedule(ctx context.Context, packageName string, args ...st
 	}
 
 	run := &tester.Run{
-		ID:         uuid.New().String(),
-		Package:    runPkg,
+		ID:         uuid.New(),
+		Package:    runPkg.Name,
 		EnqueuedAt: time.Now(),
 	}
 	err = s.db.EnqueueRun(ctx, run)
@@ -160,7 +160,7 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 		if !run.FinishedAt.IsZero() {
 			continue
 		}
-		pendingRuns[run.Package.Name] = run
+		pendingRuns[run.Package] = run
 	}
 
 	packagesToRun := make([]tester.Package, len(s.Packages))
@@ -180,19 +180,20 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 				continue
 			}
 
-			runPkg := pkg
-			runPkg.Options = nil
+			var args []string
 			for _, option := range pkg.Options {
 				if option.Default != "" {
-					runPkg.Options = append(runPkg.Options, tester.Option{
+					o := tester.Option{
 						Name:  option.Name,
 						Value: option.Default,
-					})
+					}
+					args = append(args, o.String())
 				}
 			}
 			err = s.db.EnqueueRun(ctx, &tester.Run{
-				ID:         uuid.New().String(),
-				Package:    runPkg,
+				ID:         uuid.New(),
+				Package:    pkg.Name,
+				Args:       args,
 				EnqueuedAt: time.Now(),
 			})
 			s.lastScheduledAt[pkg.Name] = time.Now()
@@ -241,7 +242,7 @@ func (s *Scheduler) resetStaleRuns(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			log.Printf("reset run %s", run.Package.Name)
+			log.Printf("reset run %s", run.Package)
 		}
 	}
 

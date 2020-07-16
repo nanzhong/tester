@@ -1,35 +1,33 @@
 {{define "test_card"}}
-<div class="card border-{{.State | testStateColour}} test mb-2">
-  <div class="card-header text-white bg-{{.State | testStateColour}}">
-    <a href="/tests/{{.ID}}" class="text-white">
+<div class="card border-{{.Result.State | testStateColour}} test mb-2">
+  <div class="card-header text-white bg-{{.Result.State | testStateColour}}">
       <div class="d-flex flex-row">
         <div class="flex-grow-1">
-          {{.Name}}
-        </div>
-        <div>
-          <i class="fas fa-link"></i>
+          {{.Result.Name}}
         </div>
       </div>
-    </a>
   </div>
   <div class="card-body py-1 bg-light">
-    <small>ID: {{.ID}}</small>
+    <a href="/tests/{{.ID}}" class="text-muted">
+      <small>ID: {{.ID}}</small>
+      <i class="fas fa-link"></i>
+    </a>
   </div>
-  {{if .SubTests}}
+  {{if .Result.SubTs}}
   <ul class="list-group list-group-flush">
-    {{$parentTest := .}}
-    {{range .SubTests}}
-    {{template "test_card_subtest" . | asSubTest $parentTest 0}}
+    {{$parentT := .Result}}
+    {{range .Result.SubTs}}
+    {{template "test_card_subtest" . | asSubTest $parentT 0}}
     {{end}}
   </ul>
   {{end}}
   <div class="card-footer">
     <div class="d-flex flex-row">
       <div class="flex-grow-1">
-        <small class="text-muted">{{.StartedAt | formatTime}} ({{.StartedAt | formatRelativeTime}})</small>
+        <small class="text-muted">{{.Result.StartedAt | formatTime}} ({{.Result.StartedAt | formatRelativeTime}})</small>
       </div>
       <div>
-        <small class="text-muted">{{.Duration | formatDuration}}</small>
+        <small class="text-muted">{{.Result.Duration | formatDuration}}</small>
       </div>
     </div>
   </div>
@@ -45,14 +43,14 @@
       </div>
       <div class="col-4 text-right m-0 p-0">
         <small class="pr-1">{{.Test.Duration | formatDuration}}</small>
-        <span class="badge badge-pill badge-{{.Test.State | testStateColour}} text-right">{{.Test.State | testStateMessage}}</span>
+        <span class="badge badge-pill bg-{{.Test.State | testStateColour}} text-right">{{.Test.State | testStateMessage}}</span>
       </div>
     </div>
   </div>
 </li>
 {{$parentTest := .Test}}
 {{$nextLevel := .NextLevel}}
-{{range .Test.SubTests}}
+{{range .Test.SubTs}}
 {{template "test_card_subtest" . | asSubTest $parentTest $nextLevel}}
 {{end}}
 {{end}}

@@ -170,12 +170,18 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		return nil
 	}
 
-	var runOptions []string
-	for _, option := range run.Package.Options {
-		runOptions = append(runOptions, option.String())
+	var pkg *tester.Package
+	for _, p := range r.packages {
+		if p.Name == run.Package {
+			pkg = &p
+			break
+		}
+	}
+	if pkg == nil {
+		return fmt.Errorf("unknown package: %s", run.Package)
 	}
 
-	log.Printf("starting run for %s (%s) with options: %s", run.Package.Name, run.ID, strings.Join(runOptions, " "))
+	log.Printf("starting run for %s (%s) with options: %s", pkg.Name, run.ID, strings.Join(run.Args, " "))
 	var (
 		stdout       bytes.Buffer
 		stderr       bytes.Buffer
@@ -187,17 +193,14 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		"-test.v",
 	}
 
-	for _, option := range run.Package.Options {
-		runArgs = append(runArgs, fmt.Sprintf("-%s", option.Name))
-		if option.Value != "" {
-			runArgs = append(runArgs, fmt.Sprintf("%s", option.Value))
-		}
+	for _, arg := range run.Args {
+		runArgs = append(runArgs, arg)
 	}
 
 	reader, writer := io.Pipe()
 	teeReader := io.TeeReader(reader, &stdout)
 
-	testCmd := exec.CommandContext(ctx, run.Package.Path, runArgs...)
+	testCmd := exec.CommandContext(ctx, pkg.Path, runArgs...)
 	testCmd.Stdout = writer
 	testCmd.Stderr = &stderr
 
@@ -214,7 +217,7 @@ func (r *Runner) runOnce(ctx context.Context) error {
 	if err != nil {
 		exitErr, ok := err.(*exec.ExitError)
 		if !ok {
-			return fmt.Errorf("running test/benchmark: %w", err)
+			return fmt.Errorf("running: %w", err)
 		}
 
 		switch exitErr.ExitCode() {
@@ -245,15 +248,16 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		events = append(events, &event)
 	}
 
-	tests, _, err := processEvents(events)
+	tests, err := processEvents(events)
 	if err != nil {
 		return fmt.Errorf("processing events: %w", err)
 	}
 
-	var testIDs []string
+	var testIDs []uuid.UUID
 	for _, test := range tests {
+		test.RunID = run.ID
 		test.Package = run.Package
-		log.Printf("Test: %s - %s - %s", test.Name, test.State.String(), test.Duration().String())
+		log.Printf("Test: %s - %s - %s", test.Result.Name, string(test.Result.State), test.Result.Duration().String())
 		testIDs = append(testIDs, test.ID)
 		if r.testerAddr != "" {
 			err := r.submitTestResult(test, run)
@@ -263,12 +267,12 @@ func (r *Runner) runOnce(ctx context.Context) error {
 
 		}
 	}
-	err = r.completeRun(run.ID, testIDs)
+	err = r.completeRun(run.ID)
 	if err != nil {
 		log.Printf("failed to mark run complete: %s", err)
 	}
 
-	log.Printf("finished run for %s", run.Package.Name)
+	log.Printf("finished run for %s", run.Package)
 	return nil
 }
 
@@ -302,7 +306,7 @@ func (r *Runner) submitTestResult(test *tester.Test, run *tester.Run) error {
 	return nil
 }
 
-func (r *Runner) failRun(runID string, errorMessage string) error {
+func (r *Runner) failRun(runID uuid.UUID, errorMessage string) error {
 	log.Printf("failing run")
 	jsonError, err := json.Marshal(errorMessage)
 	if err != nil {
@@ -333,19 +337,14 @@ func (r *Runner) failRun(runID string, errorMessage string) error {
 	return nil
 }
 
-func (r *Runner) completeRun(runID string, testIDs []string) error {
-	jsonTestIDs, err := json.Marshal(testIDs)
-	if err != nil {
-		return fmt.Errorf("marshaling test ids: %w", err)
-	}
-
+func (r *Runner) completeRun(runID uuid.UUID) error {
 	ctx, cancel := context.WithTimeout(context.Background(), resultSubmissionTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(
 		ctx,
 		"POST",
 		fmt.Sprintf("%s/api/runs/%s/complete", r.testerAddr, runID),
-		bytes.NewBuffer(jsonTestIDs),
+		nil,
 	)
 	if err != nil {
 		return fmt.Errorf("constructing request: %w", err)
@@ -377,11 +376,10 @@ func (r *Runner) authAPIRequest(req *http.Request) {
 	req.SetBasicAuth(name, r.apiKey)
 }
 
-func processEvents(events []*testEvent) ([]*tester.Test, []*tester.Benchmark, error) {
+func processEvents(events []*testEvent) ([]*tester.Test, error) {
 	var (
-		tests      []*tester.Test
-		testMap    = make(map[string]*tester.Test)
-		benchmarks []*tester.Benchmark
+		testMap = make(map[*tester.T]*tester.Test)
+		tMap    = make(map[string]*tester.T)
 	)
 
 	for _, event := range events {
@@ -392,55 +390,62 @@ func processEvents(events []*testEvent) ([]*tester.Test, []*tester.Benchmark, er
 
 		switch event.Action {
 		case "run":
-			test := &tester.Test{
-				TBCommon: tester.TBCommon{
-					ID:        uuid.New().String(),
+			t := &tester.T{
+				TB: tester.TB{
 					Name:      event.Test,
 					StartedAt: event.Time,
 				},
 			}
-			testMap[event.Test] = test
-
-			if !event.TopLevel() {
-				parentTest, ok := testMap[event.ParentTest()]
-				if !ok {
-					return nil, nil, fmt.Errorf("missing parent test %s for sub test %s", event.ParentTest(), event.Test)
-				}
-				parentTest.SubTests = append(parentTest.SubTests, test)
-			}
-		case "pass", "fail", "skip":
-			test, ok := testMap[event.Test]
-			if !ok {
-				return nil, nil, fmt.Errorf("missing test: %s", event.Test)
-			}
-			test.FinishedAt = event.Time
-			switch event.Action {
-			case "pass":
-				test.State = tester.TBPassed
-			case "fail":
-				test.State = tester.TBFailed
-			case "skip":
-				test.State = tester.TBSkipped
-			}
+			tMap[event.Test] = t
 
 			if event.TopLevel() {
-				tests = append(tests, test)
+				testMap[t] = &tester.Test{
+					ID:     uuid.New(),
+					Result: t,
+				}
+			} else {
+				parentT, ok := tMap[event.ParentTest()]
+				if !ok {
+					return nil, fmt.Errorf("missing parent t %s for sub t %s", event.ParentTest(), event.Test)
+				}
+				parentT.SubTs = append(parentT.SubTs, t)
+			}
+		case "pass", "fail", "skip":
+			t, ok := tMap[event.Test]
+			if !ok {
+				return nil, fmt.Errorf("missing t: %s", event.Test)
+			}
+			t.FinishedAt = event.Time
+			switch event.Action {
+			case "pass":
+				t.State = tester.TBStatePassed
+			case "fail":
+				t.State = tester.TBStateFailed
+			case "skip":
+				t.State = tester.TBStateSkipped
 			}
 		case "output":
-			test, ok := testMap[event.Test]
+			t, ok := tMap[event.TopLevelTest()]
 			if !ok {
-				return nil, nil, fmt.Errorf("missing test: %s", event.Test)
+				return nil, fmt.Errorf("missing t: %s", event.Test)
 			}
-			test.Output = append(test.Output, event.Output.Bytes()...)
 
-			for _, testName := range event.ParentTests() {
-				test, ok := testMap[testName]
-				if !ok {
-					return nil, nil, fmt.Errorf("missing parent test %s for sub test %s", testName, event.Test)
-				}
-				test.Output = append(test.Output, event.Output.Bytes()...)
+			test, ok := testMap[t]
+			if !ok {
+				return nil, fmt.Errorf("missing test: %s", t.Name)
 			}
+
+			test.Logs = append(test.Logs, tester.TBLog{
+				Time:   event.Time,
+				Name:   event.Test,
+				Output: event.Output.Bytes(),
+			})
 		}
 	}
-	return tests, benchmarks, nil
+
+	var tests []*tester.Test
+	for _, test := range testMap {
+		tests = append(tests, test)
+	}
+	return tests, nil
 }

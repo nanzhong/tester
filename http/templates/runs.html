@@ -1,73 +1,75 @@
-<div class="row">
-  <div class="col">
-    <h1 class="h5">Pending Runs</h1>
-    {{if .PendingRuns}}
-    <table class="table table-sm test">
-      <thead>
-        <tr>
-          <th scope="col">ID</th>
-          <th scope="col">Package</th>
-          <th scope="col">Options</th>
-          <th scope="col">Enqueued At</th>
-          <th scope="col">Started At</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .PendingRuns}}
-        <tr>
-          <td scope="row"><a href="/runs/{{.ID}}">{{.ID}} <i class="fas fa-link"></i></a></td>
-          <td scope="row">{{.Package.Name}}</td>
-          <td scope="row">
-            {{range .Package.Options}}
-            <span class="badge badge-secondary">{{.String}}</span>
-            {{end}}
-          </td>
-          <td><span data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">{{.EnqueuedAt | formatRelativeTime}}</span></td>
-          <td>{{if not .StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.StartedAt | formatTime}}">{{.StartedAt | formatRelativeTime}}</span>{{end}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}
-    <p>No pending runs...</p>
-    {{end}}
+<div class="runs">
+  <div class="row">
+    <div class="col">
+      <h1 class="h5">Pending Runs</h1>
+      {{if .PendingRuns}}
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Package</th>
+            <th scope="col">Args</th>
+            <th scope="col">Enqueued At</th>
+            <th scope="col">Started At</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .PendingRuns}}
+          <tr>
+            <td scope="row"><a href="/runs/{{.ID}}">{{.ID}} <i class="fas fa-link"></i></a></td>
+            <td scope="row">{{.Package}}</td>
+            <td scope="row">
+              {{range .Args}}
+              <span class="badge badge-secondary">{{.}}</span>
+              {{end}}
+            </td>
+            <td><span data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">{{.EnqueuedAt | formatRelativeTime}}</span></td>
+            <td>{{if not .StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.StartedAt | formatTime}}">{{.StartedAt | formatRelativeTime}}</span>{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>No pending runs...</p>
+      {{end}}
+    </div>
   </div>
-</div>
 
-<div class="row">
-  <div class="col">
-    <h1 class="h5">Recently Finished Runs (Last 50)</h1>
-    {{if .FinishedRuns}}
-    <table class="table table-sm test">
-      <thead>
-        <tr>
-          <th scope="col">ID</th>
-          <th scope="col">Package</th>
-          <th scope="col">Options</th>
-          <th scope="col">Enqueued At</th>
-          <th scope="col">Started At</th>
-          <th scope="col">Finished At</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .FinishedRuns}}
-        <tr>
-          <td scope="row"><a href="/runs/{{.ID}}">{{.ID}} <i class="fas fa-link"></i></a></td>
-          <td scope="row">{{.Package.Name}}</td>
-          <td scope="row">
-            {{range .Package.Options}}
-            <span class="badge badge-secondary">{{.String}}</span>
-            {{end}}
-          </td>
-          <td><span data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">{{.EnqueuedAt | formatRelativeTime}}</span></td>
-          <td>{{if not .StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.StartedAt | formatTime}}">{{.StartedAt | formatRelativeTime}}</span>{{end}}</td>
-          <td><span data-toggle="tooltip" data-placement="top" title="{{.FinishedAt | formatTime}}">{{.FinishedAt | formatRelativeTime}}</span></td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}
-    <p>No finishedrr runs...</p>
-    {{end}}
+  <div class="row">
+    <div class="col">
+      <h1 class="h5">Recently Finished Runs (Last 50)</h1>
+      {{if .FinishedRuns}}
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Package</th>
+            <th scope="col">Args</th>
+            <th scope="col">Enqueued At</th>
+            <th scope="col">Started At</th>
+            <th scope="col">Finished At</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .FinishedRuns}}
+          <tr>
+            <td><a href="/runs/{{.ID}}">{{.ID}} <i class="fas fa-link"></i></a></td>
+            <td>{{.Package}}</td>
+            <td>
+              {{range .Args}}
+              <span class="badge bg-secondary">{{.}}</span>
+              {{end}}
+            </td>
+            <td><span data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">{{.EnqueuedAt | formatRelativeTime}}</span></td>
+            <td>{{if not .StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.StartedAt | formatTime}}">{{.StartedAt | formatRelativeTime}}</span>{{end}}</td>
+            <td><span data-toggle="tooltip" data-placement="top" title="{{.FinishedAt | formatTime}}">{{.FinishedAt | formatRelativeTime}}</span></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>No finished runs...</p>
+      {{end}}
+    </div>
   </div>
 </div>

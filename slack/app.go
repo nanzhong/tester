@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nanzhong/tester"
 	"github.com/nanzhong/tester/alerting"
 	"github.com/nanzhong/tester/scheduler"
 	"github.com/nlopes/slack"
@@ -57,6 +58,8 @@ func WithScheduler(scheduler *scheduler.Scheduler) Option {
 }
 
 type App struct {
+	packages []tester.Package
+
 	username      string
 	webhookURL    string
 	signingSecret string
@@ -67,7 +70,7 @@ type App struct {
 	usageMessage *slack.Message
 }
 
-func NewApp(opts ...Option) *App {
+func NewApp(packages []tester.Package, opts ...Option) *App {
 	defOpts := &options{
 		username: "tester",
 	}
@@ -77,6 +80,7 @@ func NewApp(opts ...Option) *App {
 	}
 
 	return &App{
+		packages:      packages,
 		username:      defOpts.username,
 		webhookURL:    defOpts.webhookURL,
 		signingSecret: defOpts.signingSecret,
@@ -143,6 +147,17 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 
 	packageName := args[1]
 	args = args[2:]
+
+	pkg, err := s.getPackage(packageName)
+	if err != nil {
+		message := &slack.Msg{
+			Text: fmt.Sprintf(":warning: Failed to schedule test run for package %s: *%s*", packageName, err),
+		}
+
+		json.NewEncoder(w).Encode(message)
+		return
+	}
+
 	run, err := s.scheduler.Schedule(r.Context(), packageName, args...)
 	if err != nil {
 		message := &slack.Msg{
@@ -159,12 +174,12 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 
 	runDetail := slack.Attachment{
 		Color:     "#80cee1",
-		Title:     run.Package.Name,
+		Title:     run.Package,
 		TitleLink: runURL,
 		Fields: []slack.AttachmentField{
 			{
 				Title: "Run ID",
-				Value: run.ID,
+				Value: run.ID.String(),
 			},
 		},
 
@@ -174,7 +189,7 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var options []string
-	for _, option := range run.Package.Options {
+	for _, option := range pkg.Options {
 		options = append(options, fmt.Sprintf("`%s`", option.String()))
 	}
 	if len(options) > 0 {
@@ -196,33 +211,38 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 func (s *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 	testLink := fmt.Sprintf("%s/tests/%s", alert.BaseURL, alert.Test.ID)
 
-	messageText := slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf(":warning: *FAIL* - %s\n%s", alert.Test.Name, testLink), false, false)
+	messageText := slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf(":warning: *FAIL* - %s\n%s", alert.Test.Result.Name, testLink), false, false)
 	messageSection := slack.NewSectionBlock(messageText, nil, nil)
 
 	testDetail := slack.Attachment{
 		Color:     "#ff005f",
-		Title:     alert.Test.Name,
+		Title:     alert.Test.Result.Name,
 		TitleLink: testLink,
 		Fields: []slack.AttachmentField{
 			{
 				Title: "Test ID",
-				Value: alert.Test.ID,
+				Value: alert.Test.ID.String(),
 				Short: true,
 			},
 			{
 				Title: "Duration",
-				Value: alert.Test.Duration().String(),
+				Value: alert.Test.Result.Duration().String(),
 				Short: true,
 			},
 		},
 
 		Footer:     "tester",
 		FooterIcon: "",
-		Ts:         json.Number(strconv.FormatInt(alert.Test.FinishedAt.Unix(), 10)),
+		Ts:         json.Number(strconv.FormatInt(alert.Test.Result.FinishedAt.Unix(), 10)),
+	}
+
+	pkg, err := s.getPackage(alert.Test.Package)
+	if err != nil {
+		return fmt.Errorf("firing slack alert: %w", err)
 	}
 
 	var options []string
-	for _, option := range alert.Test.Package.Options {
+	for _, option := range pkg.Options {
 		options = append(options, fmt.Sprintf("`%s`", option.String()))
 	}
 	if len(options) > 0 {
@@ -232,7 +252,7 @@ func (s *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 		})
 	}
 
-	err := slack.PostWebhook(s.webhookURL, &slack.WebhookMessage{
+	err = slack.PostWebhook(s.webhookURL, &slack.WebhookMessage{
 		Username: s.username,
 		Blocks: []slack.Block{
 			messageSection,
@@ -281,4 +301,13 @@ func (a *App) helpMessage(command string) *slack.Message {
 	message := slack.NewBlockMessage(slack.NewSectionBlock(slack.NewTextBlockObject(slack.MarkdownType, strings.Join(lines, "\n"), false, false), nil, nil))
 	a.usageMessage = &message
 	return a.usageMessage
+}
+
+func (a *App) getPackage(name string) (*tester.Package, error) {
+	for _, p := range a.packages {
+		if p.Name == name {
+			return &p, nil
+		}
+	}
+	return nil, fmt.Errorf("unknown package: %s", name)
 }
