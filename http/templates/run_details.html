@@ -1,62 +1,64 @@
-<nav aria-label="breadcrumb">
-  <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="/runs">Runs</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{.Run.Package.Name}} - {{.Run.ID}}</li>
-  </ol>
-</nav>
+<div class="run-details">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/runs">Runs</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{.Run.Package}} - {{.Run.ID}}</li>
+    </ol>
+  </nav>
 
-{{if .Run.FinishedAt.IsZero}}
-<h3>Run pending</h3>
-{{else}}
-{{if .Run.Error}}
-<h3>Run failed</h3>
-{{else}}
-<h3>Run completed</h3>
-{{end}}
-{{end}}
+  {{if .Run.FinishedAt.IsZero}}
+  <h2 class="h3">Run pending</h2>
+  {{else}}
+  {{if .Run.Error}}
+  <h2 class="h3">Run failed</h2>
+  {{else}}
+  <h2 class="h3">Run completed</h2>
+  {{end}}
+  {{end}}
 
-<table class="table table-sm test">
-  <thead>
-    <tr>
-      <th scope="col">Options</th>
-      <th scope="col">Enqueued At</th>
-      <th scope="col">Started At</th>
-      <th scope="col">Finished At</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>
-        {{range .Run.Package.Options}}
-        <span class="badge badge-secondary">{{.Name}}={{.Value}}</span>
-        {{end}}
-      </td>
-      <td><span data-toggle="tooltip" data-placement="top" title="{{.Run.EnqueuedAt | formatTime}}">{{.Run.EnqueuedAt | formatRelativeTime}}</span></td>
-      <td>{{if not .Run.StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.Run.StartedAt | formatTime}}">{{.Run.StartedAt | formatRelativeTime}}</span>{{end}}</td>
-      <td>{{if not .Run.FinishedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.Run.FinishedAt | formatTime}}">{{.Run.FinishedAt | formatRelativeTime}}</span>{{end}}</td>
-    </tr>
-  </tbody>
-</table>
+  <table class="table table-sm test">
+    <thead>
+      <tr>
+        <th scope="col">Args</th>
+        <th scope="col">Enqueued At</th>
+        <th scope="col">Started At</th>
+        <th scope="col">Finished At</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          {{range .Run.Args}}
+          <span class="badge bg-secondary">{{.}}</span>
+          {{end}}
+        </td>
+        <td><span data-toggle="tooltip" data-placement="top" title="{{.Run.EnqueuedAt | formatTime}}">{{.Run.EnqueuedAt | formatRelativeTime}}</span></td>
+        <td>{{if not .Run.StartedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.Run.StartedAt | formatTime}}">{{.Run.StartedAt | formatRelativeTime}}</span>{{end}}</td>
+        <td>{{if not .Run.FinishedAt.IsZero}}<span data-toggle="tooltip" data-placement="top" title="{{.Run.FinishedAt | formatTime}}">{{.Run.FinishedAt | formatRelativeTime}}</span>{{end}}</td>
+      </tr>
+    </tbody>
+  </table>
 
-{{if .Run.FinishedAt.IsZero}}
-<p>Awaiting results...</p>
-{{else}}
-{{if .Run.Error}}
-<pre><code>{{.Run.Error}}</code></pre>
-{{else}}
-{{range .Run.Tests}}
-<div class="row mb-2">
-  <div class="col-lg">
-    {{template "test_card" .}}
+  {{if .Run.FinishedAt.IsZero}}
+  <p>Awaiting results...</p>
+  {{else}}
+  {{if .Run.Error}}
+  <pre><code>{{.Run.Error}}</code></pre>
+  {{else}}
+  {{range .Run.Tests}}
+  <div class="row mb-2">
+    <div class="col-lg">
+      {{template "test_card" .}}
+    </div>
+    <div class="col-lg-8">
+      {{if .Logs}}
+      <pre><code>{{.Logs | formatLogs}}</code></pre>
+      {{else}}
+      <p>No logs received yet...</p>
+      {{end}}
+    </div>
   </div>
-  <div class="col-lg-8">
-    {{if .OutputString}}
-    <pre><code>{{.OutputString}}</code></pre>
-    {{else}}
-    <p>No logs received yet...</p>
-    {{end}}
-  </div>
+  {{end}}
+  {{end}}
+  {{end}}
 </div>
-{{end}}
-{{end}}
-{{end}}

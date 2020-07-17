@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/nanzhong/tester"
 	"github.com/nanzhong/tester/db"
@@ -16,26 +17,21 @@ import (
 type UIHandler struct {
 	http.Handler
 
-	db db.DB
+	db       db.DB
+	packages []tester.Package
 }
 
 // NewUIHandler constructs a new `UIHandler`.
-func NewUIHandler(opts ...Option) *UIHandler {
-	defOpts := &options{
-		db: &db.MemDB{},
-	}
-
-	for _, opt := range opts {
-		opt(defOpts)
-	}
-
+func NewUIHandler(db db.DB, packages []tester.Package) *UIHandler {
 	handler := &UIHandler{
-		db: defOpts.db,
+		db:       db,
+		packages: packages,
 	}
 
 	r := mux.NewRouter()
-	r.HandleFunc("/", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
-	r.HandleFunc("/tests", LogHandlerFunc(handler.listTests)).Methods(http.MethodGet)
+	r.HandleFunc("/", LogHandlerFunc(handler.listPackages)).Methods(http.MethodGet)
+	r.HandleFunc("/packages", LogHandlerFunc(handler.listPackages)).Methods(http.MethodGet)
+	r.HandleFunc("/packages/{package}", LogHandlerFunc(handler.getPackage)).Methods(http.MethodGet)
 	r.HandleFunc("/tests/{test_id}", LogHandlerFunc(handler.getTest)).Methods(http.MethodGet)
 	r.HandleFunc("/runs", LogHandlerFunc(handler.listRuns)).Methods(http.MethodGet)
 	r.HandleFunc("/runs/{run_id}", LogHandlerFunc(handler.getRun)).Methods(http.MethodGet)
@@ -48,45 +44,69 @@ func (h *UIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Handler.ServeHTTP(w, r)
 }
 
-func (h *UIHandler) listTests(w http.ResponseWriter, r *http.Request) {
-	var template string
-	switch view := r.URL.Query().Get("view"); view {
-	case "recent", "name":
-		template = fmt.Sprintf("tests_%s", view)
-	default:
-		template = "tests"
+func (h *UIHandler) listPackages(w http.ResponseWriter, r *http.Request) {
+	runsByPackage := make(map[string][]*tester.Run)
+	for _, p := range h.packages {
+		runs, err := h.db.ListRunsForPackage(r.Context(), p.Name, 15)
+		if err != nil {
+			h.RenderError(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		runsByPackage[p.Name] = runs
 	}
 
-	tests, err := h.db.ListTests(r.Context(), 0)
+	value := &struct {
+		Packages []struct {
+			Name string
+			Runs []*tester.Run
+		}
+	}{}
+	for pkg, runs := range runsByPackage {
+		value.Packages = append(value.Packages, struct {
+			Name string
+			Runs []*tester.Run
+		}{
+			Name: pkg,
+			Runs: runs,
+		})
+	}
+
+	sort.Slice(value.Packages, func(i, j int) bool {
+		return value.Packages[i].Name < value.Packages[j].Name
+	})
+
+	h.Render(w, r, "packages", value)
+}
+
+func (h *UIHandler) getPackage(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	pkg := vars["package"]
+	runs, err := h.db.ListRunsForPackage(r.Context(), pkg, 50)
 	if err != nil {
 		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
 	value := &struct {
-		Tests       []*tester.Test
-		TestNames   []string
-		TestsByName map[string][]*tester.Test
+		Name string
+		Runs []*tester.Run
 	}{
-		Tests:       tests,
-		TestsByName: make(map[string][]*tester.Test),
+		Name: pkg,
+		Runs: runs,
 	}
 
-	for _, test := range tests {
-		value.TestsByName[test.Name] = append(value.TestsByName[test.Name], test)
-	}
-
-	for name := range value.TestsByName {
-		value.TestNames = append(value.TestNames, name)
-	}
-	sort.Strings(value.TestNames)
-
-	h.Render(w, r, template, value)
+	h.Render(w, r, "package_details", value)
 }
 
 func (h *UIHandler) getTest(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	test, err := h.db.GetTest(r.Context(), vars["test_id"])
+	testID, err := uuid.Parse(vars["test_id"])
+	if err != nil {
+		h.RenderError(w, r, err, http.StatusNotFound)
+		return
+	}
+
+	test, err := h.db.GetTest(r.Context(), testID)
 	if err != nil {
 		if err == db.ErrNotFound {
 			h.RenderError(w, r, err, http.StatusNotFound)
@@ -133,7 +153,13 @@ func (h *UIHandler) listRuns(w http.ResponseWriter, r *http.Request) {
 
 func (h *UIHandler) getRun(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	run, err := h.db.GetRun(r.Context(), vars["run_id"])
+	runID, err := uuid.Parse(vars["run_id"])
+	if err != nil {
+		h.RenderError(w, r, err, http.StatusNotFound)
+		return
+	}
+
+	run, err := h.db.GetRun(r.Context(), runID)
 	if err != nil {
 		if err == db.ErrNotFound {
 			h.RenderError(w, r, err, http.StatusNotFound)

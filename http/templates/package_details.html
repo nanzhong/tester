@@ -1,0 +1,19 @@
+<div class="package-details">
+  <div class="row">
+    <div class="col">
+      <h2 class="h4"><a href="/packages/{{.Name}}">{{.Name}}</a></h2>
+      {{if .Runs}}
+      <div class="row row-cols-1 row-cols-md-4 row-cols-lg-5 g-3">
+        {{range .Runs}}
+        <div class="col">
+          {{template "run_card" .}}
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <h5>No runs yet</h5>
+      <p>Kick off a test run and publish the results...</p>
+      {{end}}
+    </div>
+  </div>
+</div>

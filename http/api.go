@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/nanzhong/tester"
 	"github.com/nanzhong/tester/alerting"
@@ -27,9 +28,8 @@ type APIHandler struct {
 }
 
 // NewAPIHandler constructs a new `APIHandler`.
-func NewAPIHandler(opts ...Option) *APIHandler {
+func NewAPIHandler(db db.DB, opts ...Option) *APIHandler {
 	defOpts := &options{
-		db:           &db.MemDB{},
 		alertManager: &alerting.AlertManager{},
 	}
 
@@ -38,7 +38,7 @@ func NewAPIHandler(opts ...Option) *APIHandler {
 	}
 
 	handler := &APIHandler{
-		db:           defOpts.db,
+		db:           db,
 		alertManager: defOpts.alertManager,
 		slackApp:     defOpts.slackApp,
 		apiKey:       defOpts.apiKey,
@@ -86,17 +86,17 @@ func (h *APIHandler) submitTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	runLabels := prometheus.Labels{
-		"name":  test.Name,
-		"state": test.State.String(),
+		"name":  test.Result.Name,
+		"state": string(test.Result.State),
 	}
-	RunDurationMetric.With(runLabels).Observe(test.FinishedAt.Sub(test.StartedAt).Seconds())
-	RunLastMetric.With(runLabels).Set(float64(test.StartedAt.Unix()))
+	RunDurationMetric.With(runLabels).Observe(test.Result.FinishedAt.Sub(test.Result.StartedAt).Seconds())
+	RunLastMetric.With(runLabels).Set(float64(test.Result.StartedAt.Unix()))
 
-	if test.State == tester.TBFailed {
+	if test.Result.State == tester.TBStateFailed {
 		go func() {
 			err := h.alertManager.Fire(context.Background(), &alerting.Alert{Test: &test})
 			if err != nil {
-				log.Printf("failed to fire alert: %w", err)
+				log.Printf("failed to fire alert: %s", err)
 			}
 		}()
 	}
@@ -118,7 +118,13 @@ func (h *APIHandler) listTests(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) getTest(w http.ResponseWriter, r *http.Request) {
-	test, err := h.db.GetTest(r.Context(), mux.Vars(r)["test_id"])
+	testID, err := uuid.Parse(mux.Vars(r)["test_id"])
+	if err != nil {
+		renderAPIError(w, http.StatusNotFound, err)
+		return
+	}
+
+	test, err := h.db.GetTest(r.Context(), testID)
 	if err != nil {
 		if err == db.ErrNotFound {
 			renderAPIError(w, http.StatusNotFound, err)
@@ -159,7 +165,7 @@ func (h *APIHandler) claimRun(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if _, supported := supportedPackages[run.Package.Name]; supported {
+		if _, supported := supportedPackages[run.Package]; supported {
 			h.db.StartRun(r.Context(), run.ID)
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(run)
@@ -171,15 +177,13 @@ func (h *APIHandler) claimRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) completeRun(w http.ResponseWriter, r *http.Request) {
-	var testIDs []string
-	err := json.NewDecoder(r.Body).Decode(&testIDs)
+	runID, err := uuid.Parse(mux.Vars(r)["run_id"])
 	if err != nil {
-		log.Printf("failed to parse complete run request: %s", err)
-		renderAPIError(w, http.StatusInternalServerError, err)
+		renderAPIError(w, http.StatusNotFound, err)
 		return
 	}
 
-	err = h.db.CompleteRun(r.Context(), mux.Vars(r)["run_id"], testIDs)
+	err = h.db.CompleteRun(r.Context(), runID)
 	if err != nil {
 		log.Printf("failed to complete run: %s", err)
 		renderAPIError(w, http.StatusInternalServerError, err)
@@ -190,15 +194,21 @@ func (h *APIHandler) completeRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) failRun(w http.ResponseWriter, r *http.Request) {
+	runID, err := uuid.Parse(mux.Vars(r)["run_id"])
+	if err != nil {
+		renderAPIError(w, http.StatusNotFound, err)
+		return
+	}
+
 	var errorMessage string
-	err := json.NewDecoder(r.Body).Decode(&errorMessage)
+	err = json.NewDecoder(r.Body).Decode(&errorMessage)
 	if err != nil {
 		log.Printf("failed to parse fail run request: %s", err)
 		renderAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	err = h.db.FailRun(r.Context(), mux.Vars(r)["run_id"], errorMessage)
+	err = h.db.FailRun(r.Context(), runID, errorMessage)
 	if err != nil {
 		log.Printf("failed to fail run: %s", err)
 		renderAPIError(w, http.StatusInternalServerError, err)

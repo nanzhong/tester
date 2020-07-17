@@ -104,15 +104,15 @@ func parseTemplate(layout *template.Template, content string) (*template.Templat
 }
 
 type subTest struct {
-	ParentTest *tester.Test
-	Test       *tester.Test
+	ParentTest *tester.T
+	Test       *tester.T
 	Level      int
 	NextLevel  int
 }
 
 func (s *UIHandler) templateFuncs() template.FuncMap {
 	return template.FuncMap{
-		"asSubTest": func(parent *tester.Test, level int, test *tester.Test) subTest {
+		"asSubTest": func(parent *tester.T, level int, test *tester.T) subTest {
 			return subTest{
 				ParentTest: parent,
 				Test:       test,
@@ -148,32 +148,96 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 			}
 			return d.Round(time.Second).String()
 		},
-		"formatLogs": func(logData []byte) string {
-			return string(logData)
+		"formatLogs": func(logData []tester.TBLog) string {
+			var b strings.Builder
+			for _, l := range logData {
+				b.Write(l.Output)
+			}
+			return b.String()
 		},
 		"testStateMessage": func(state tester.TBState) string {
-			switch state {
-			case tester.TBPassed:
-				return "passed"
-			case tester.TBFailed:
-				return "failed"
-			case tester.TBSkipped:
-				return "skipped"
-			default:
-				return "unknown"
-			}
+			return string(state)
 		},
 		"testStateColour": func(state tester.TBState) string {
 			switch state {
-			case tester.TBPassed:
+			case tester.TBStatePassed:
 				return "success"
-			case tester.TBFailed:
+			case tester.TBStateFailed:
 				return "danger"
-			case tester.TBSkipped:
+			case tester.TBStateSkipped:
 				return "warning"
 			default:
 				return "unknown"
 			}
+		},
+		"runState": func(run *tester.Run) string {
+			if run.StartedAt.IsZero() {
+				return "pending"
+			}
+			if run.FinishedAt.IsZero() {
+				return "running"
+			}
+			if run.Error == "" {
+				return "passed"
+			}
+			return "failed"
+		},
+		"runTests": func(run *tester.Run) int {
+			return len(run.Tests)
+		},
+		"runTestsPassed": func(run *tester.Run) int {
+			num := 0
+			for _, t := range run.Tests {
+				if t.Result.State == tester.TBStatePassed {
+					num++
+				}
+			}
+			return num
+		},
+		"runTestsPassedPercent": func(run *tester.Run) int {
+			num := 0
+			for _, t := range run.Tests {
+				if t.Result.State == tester.TBStatePassed {
+					num++
+				}
+			}
+			return num / len(run.Tests) * 100
+		},
+		"runTestsSkipped": func(run *tester.Run) int {
+			num := 0
+			for _, t := range run.Tests {
+				if t.Result.State == tester.TBStateSkipped {
+					num++
+				}
+			}
+			return num
+		},
+		"runTestsSkippedPercent": func(run *tester.Run) int {
+			num := 0
+			for _, t := range run.Tests {
+				if t.Result.State == tester.TBStateSkipped {
+					num++
+				}
+			}
+			return num / len(run.Tests) * 100
+		},
+		"runTestsFailed": func(run *tester.Run) int {
+			num := 0
+			for _, t := range run.Tests {
+				if t.Result.State == tester.TBStateFailed {
+					num++
+				}
+			}
+			return num
+		},
+		"runTestsFailedPercent": func(run *tester.Run) int {
+			num := 0
+			for _, t := range run.Tests {
+				if t.Result.State == tester.TBStateFailed {
+					num++
+				}
+			}
+			return num / len(run.Tests) * 100
 		},
 	}
 }

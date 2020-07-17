@@ -3,79 +3,73 @@ package tester
 import (
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // TBState represents the completion state of a `testing.TB`.
-type TBState int
+type TBState string
 
 const (
-	_ = iota
-	// TBPassed represents a passed test.
-	TBPassed
+	// TBStatePassed represents a passed test.
+	TBStatePassed TBState = "passed"
 	// TBFailed represents a failed test.
-	TBFailed
+	TBStateFailed TBState = "failed"
 	// TBSkipped represents a skipped test.
-	TBSkipped
+	TBStateSkipped TBState = "skipped"
 )
 
-// String is the human readable representation of the state.
-func (s TBState) String() string {
-	switch s {
-	case TBPassed:
-		return "passed"
-	case TBFailed:
-		return "failed"
-	case TBSkipped:
-		return "skipped"
-	}
-	return ""
-}
-
-// TBCommon is the representation of the common fields of a testing.TB.
-type TBCommon struct {
-	ID         string    `json:"id"`
+// TB is the representation of the common fields of a testing.TB.
+type TB struct {
 	Name       string    `json:"name"`
 	StartedAt  time.Time `json:"started_at"`
 	FinishedAt time.Time `json:"finished_at"`
 	State      TBState   `json:"state"`
-	Output     []byte    `json:"output"`
 }
 
 // Duration returns the run duration the Test.
-func (c *TBCommon) Duration() time.Duration {
+func (c *TB) Duration() time.Duration {
 	return c.FinishedAt.Sub(c.StartedAt)
 }
 
-func (c *TBCommon) OutputString() string {
-	return string(c.Output)
+type TBLog struct {
+	Time   time.Time `json:"time"`
+	Name   string    `json:"name"`
+	Output []byte    `json:"output"`
 }
 
-// Test is the representation of a `testing.T`.
+// T represents the results of a `testing.T`.
+type T struct {
+	TB
+
+	SubTs []*T `json:"sub_ts"`
+}
+
+// Test is a run of a `testing.T`.
 type Test struct {
-	Package Package `json:"package"`
+	ID      uuid.UUID `json:"id"`
+	Package string    `json:"package"`
+	RunID   uuid.UUID `json:"run_id"`
 
-	TBCommon
-	SubTests []*Test `json:"sub_tests,omitempty"`
-}
-
-// Benchmark is the representation of a `testing.B`.
-type Benchmark struct {
-	TBCommon
-
-	SubBenchmarks []*Benchmark `json:"sub_benchmarks,omitempty"`
+	Result *T      `json:"result"`
+	Logs   []TBLog `json:"logs"`
 }
 
 // Run is the representation of a pending test or benchmark that has not
 // completed.
 type Run struct {
-	ID         string    `json:"id"`
-	Package    Package   `json:"package"`
+	ID         uuid.UUID `json:"id"`
+	Package    string    `json:"package"`
 	Args       []string  `json:"args"`
 	EnqueuedAt time.Time `json:"enqueued_at"`
 	StartedAt  time.Time `json:"started_at"`
 	FinishedAt time.Time `json:"finished_at"`
 	Tests      []*Test   `json:"tests"`
 	Error      string    `json:"error"`
+}
+
+func (r *Run) Duration() time.Duration {
+	return r.FinishedAt.Sub(r.StartedAt)
 }
 
 // Package represents a go package that can be tested or benchmarked.

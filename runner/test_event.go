@@ -16,6 +16,15 @@ func (e *testEvent) TopLevel() bool {
 	return !strings.Contains(e.Test, "/")
 }
 
+func (e *testEvent) TopLevelTest() string {
+	if e.TopLevel() {
+		return e.Test
+	}
+
+	parts := strings.Split(e.Test, "/")
+	return parts[0]
+}
+
 func (e *testEvent) ParentTest() string {
 	parts := strings.Split(e.Test, "/")
 	return strings.Join(parts[:len(parts)-1], "/")

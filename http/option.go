@@ -2,7 +2,6 @@ package http
 
 import (
 	"github.com/nanzhong/tester/alerting"
-	"github.com/nanzhong/tester/db"
 	"github.com/nanzhong/tester/slack"
 )
 
@@ -10,17 +9,9 @@ import (
 type Option func(*options)
 
 type options struct {
-	db           db.DB
 	alertManager *alerting.AlertManager
 	slackApp     *slack.App
 	apiKey       string
-}
-
-// WithDB allows configuring a DB.
-func WithDB(db db.DB) Option {
-	return func(opts *options) {
-		opts.db = db
-	}
 }
 
 // WithAlertManager allows configuring a custom alert manager.
