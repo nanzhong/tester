@@ -342,7 +342,7 @@ func (p *PG) ListPendingRuns(ctx context.Context) ([]*tester.Run, error) {
 	var runs []*tester.Run
 	err := p.tx(ctx, func(tx pgx.Tx) error {
 		var err error
-		runs, err = p.listRuns(ctx, p.pool, "started_at IS NULL", "enqueued_at ASC", 0)
+		runs, err = p.listRuns(ctx, p.pool, "finished_at IS NULL", "enqueued_at ASC", 0)
 		return err
 	})
 	if err != nil {
