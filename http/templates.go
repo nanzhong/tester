@@ -201,7 +201,7 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 					num++
 				}
 			}
-			return float64(num) / float64(len(run.Tests)*100)
+			return float64(num) / float64(len(run.Tests)) * 100
 		},
 		"runTestsSkipped": func(run *tester.Run) int {
 			num := 0
@@ -219,7 +219,7 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 					num++
 				}
 			}
-			return float64(num) / float64(len(run.Tests)*100)
+			return float64(num) / float64(len(run.Tests)) * 100
 		},
 		"runTestsFailed": func(run *tester.Run) int {
 			num := 0
@@ -237,7 +237,7 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 					num++
 				}
 			}
-			return float64(num) / float64(len(run.Tests)*100)
+			return float64(num) / float64(len(run.Tests)) * 100
 		},
 	}
 }
