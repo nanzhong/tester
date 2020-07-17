@@ -194,14 +194,14 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 			}
 			return num
 		},
-		"runTestsPassedPercent": func(run *tester.Run) int {
+		"runTestsPassedPercent": func(run *tester.Run) float64 {
 			num := 0
 			for _, t := range run.Tests {
 				if t.Result.State == tester.TBStatePassed {
 					num++
 				}
 			}
-			return num / len(run.Tests) * 100
+			return float64(num) / float64(len(run.Tests)*100)
 		},
 		"runTestsSkipped": func(run *tester.Run) int {
 			num := 0
@@ -212,14 +212,14 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 			}
 			return num
 		},
-		"runTestsSkippedPercent": func(run *tester.Run) int {
+		"runTestsSkippedPercent": func(run *tester.Run) float64 {
 			num := 0
 			for _, t := range run.Tests {
 				if t.Result.State == tester.TBStateSkipped {
 					num++
 				}
 			}
-			return num / len(run.Tests) * 100
+			return float64(num) / float64(len(run.Tests)*100)
 		},
 		"runTestsFailed": func(run *tester.Run) int {
 			num := 0
@@ -230,14 +230,14 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 			}
 			return num
 		},
-		"runTestsFailedPercent": func(run *tester.Run) int {
+		"runTestsFailedPercent": func(run *tester.Run) float64 {
 			num := 0
 			for _, t := range run.Tests {
 				if t.Result.State == tester.TBStateFailed {
 					num++
 				}
 			}
-			return num / len(run.Tests) * 100
+			return float64(num) / float64(len(run.Tests)*100)
 		},
 	}
 }
