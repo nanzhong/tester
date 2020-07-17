@@ -20,7 +20,7 @@
             <td scope="row">{{.Package}}</td>
             <td scope="row">
               {{range .Args}}
-              <span class="badge badge-secondary">{{.}}</span>
+              <span class="badge bg-secondary">{{.}}</span>
               {{end}}
             </td>
             <td><span data-toggle="tooltip" data-placement="top" title="{{.EnqueuedAt | formatTime}}">{{.EnqueuedAt | formatRelativeTime}}</span></td>
