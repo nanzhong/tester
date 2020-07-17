@@ -14,9 +14,9 @@
     {{if or (eq (runState .) "passed") (eq (runState .) "failed")}}
     <div class="progress" style="width: 100%;">
 
-      <div class="progress-bar bg-success" role="progressbar" style="width: {{. | runTestsPassedPercent}}%">{{. | runTestsPassedPercent}}%</div>
-      <div class="progress-bar bg-warning" role="progressbar" style="width: {{. | runTestsSkippedPercent}}%">{{. | runTestsSkippedPercent}}%</div>
-      <div class="progress-bar bg-danger" role="progressbar" style="width: {{. |runTestsFailedPercent}}%">{{. | runTestsFailedPercent}}%</div>
+      <div class="progress-bar bg-success" role="progressbar" style="width: {{. | runTestsPassedPercent}}%">{{. | runTestsPassedPercent | printf "%.1f"}}%</div>
+      <div class="progress-bar bg-warning" role="progressbar" style="width: {{. | runTestsSkippedPercent}}%">{{. | runTestsSkippedPercent | printf "%.1f"}}%</div>
+      <div class="progress-bar bg-danger" role="progressbar" style="width: {{. |runTestsFailedPercent}}%">{{. | runTestsFailedPercent | printf "%.1f"}}%</div>
     </div>
     {{else}}
     <div class="d-flex justify-content-center">
