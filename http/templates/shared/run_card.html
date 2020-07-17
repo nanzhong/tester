@@ -1,22 +1,25 @@
 {{define "run_card"}}
 <div class="card h-100">
-  <div class="card-header p-1 pl-2 pr-2" style="font-size: 75%;">
+  <div class="card-header p-1">
     <div class="d-flex">
       <div class="flex-grow-1">
-        <a href="/runs/{{.ID}}">Run Details</a>
+        <small><a href="/runs/{{.ID}}">Run Details</a></small>
       </div>
       <div>
-        <span class="badge bg-info">{{runState .}}</span>
+        <small><span class="badge bg-info">{{runState .}}</span></small>
       </div>
     </div>
   </div>
-  <div class="card-body p-1 pl-2 pr-2">
-    {{if or (eq (runState .) "passed") (eq (runState .) "failed")}}
+  <div class="card-body p-1">
+    {{if eq (runState .) "finished"}}
     <div class="progress" style="width: 100%;">
-
       <div class="progress-bar bg-success" role="progressbar" style="width: {{. | runTestsPassedPercent}}%">{{. | runTestsPassedPercent | printf "%.1f"}}%</div>
       <div class="progress-bar bg-warning" role="progressbar" style="width: {{. | runTestsSkippedPercent}}%">{{. | runTestsSkippedPercent | printf "%.1f"}}%</div>
       <div class="progress-bar bg-danger" role="progressbar" style="width: {{. |runTestsFailedPercent}}%">{{. | runTestsFailedPercent | printf "%.1f"}}%</div>
+    </div>
+    {{else if eq (runState .) "failed"}}
+    <div class="progress" style="width: 100%;">
+      <div class="progress-bar bg-danger" role="progressbar" style="width: 100%">Error</div>
     </div>
     {{else}}
     <div class="d-flex justify-content-center">
@@ -36,7 +39,7 @@
         {{end}}
       </div>
       <div>
-        {{if or (eq (runState .) "passed") (eq (runState .) "failed")}}
+        {{if or (eq (runState .) "finished") (eq (runState .) "failed")}}
         <small class="text-muted">{{.Duration | formatDuration}}</small>
         {{end}}
       </div>

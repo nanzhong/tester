@@ -178,7 +178,7 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 				return "running"
 			}
 			if run.Error == "" {
-				return "passed"
+				return "finished"
 			}
 			return "failed"
 		},
