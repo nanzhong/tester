@@ -355,7 +355,7 @@ func (p *PG) ListFinishedRuns(ctx context.Context, limit int) ([]*tester.Run, er
 	var runs []*tester.Run
 	err := p.tx(ctx, func(tx pgx.Tx) error {
 		var err error
-		runs, err = p.listRuns(ctx, p.pool, "finished_at IS NOT NULL", "finished_at ASC", limit)
+		runs, err = p.listRuns(ctx, p.pool, "finished_at IS NOT NULL", "finished_at DESC", limit)
 		return err
 	})
 	if err != nil {
