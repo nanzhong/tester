@@ -47,7 +47,7 @@ func (h *UIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *UIHandler) listPackages(w http.ResponseWriter, r *http.Request) {
 	runsByPackage := make(map[string][]*tester.Run)
 	for _, p := range h.packages {
-		runs, err := h.db.ListRunsForPackage(r.Context(), p.Name, 15)
+		runs, err := h.db.ListRunsForPackage(r.Context(), p.Name, 5)
 		if err != nil {
 			h.RenderError(w, r, err, http.StatusInternalServerError)
 			return
