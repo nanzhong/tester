@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -75,6 +76,16 @@ func (h *APIHandler) submitTest(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&test)
 	if err != nil {
 		renderAPIError(w, 400, fmt.Errorf("decoding json: %w", err))
+		return
+	}
+
+	run, err := h.db.GetRun(r.Context(), test.RunID)
+	if err != nil {
+		renderAPIError(w, http.StatusInternalServerError, fmt.Errorf("getting run: %w", err))
+		return
+	}
+	if !run.FinishedAt.IsZero() {
+		renderAPIError(w, http.StatusBadRequest, errors.New("cannot submit test for finished run"))
 		return
 	}
 
@@ -183,6 +194,16 @@ func (h *APIHandler) completeRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	run, err := h.db.GetRun(r.Context(), runID)
+	if err != nil {
+		renderAPIError(w, http.StatusInternalServerError, fmt.Errorf("getting run: %w", err))
+		return
+	}
+	if !run.FinishedAt.IsZero() {
+		renderAPIError(w, http.StatusBadRequest, errors.New("cannot complete already finished run"))
+		return
+	}
+
 	err = h.db.CompleteRun(r.Context(), runID)
 	if err != nil {
 		log.Printf("failed to complete run: %s", err)
@@ -197,6 +218,16 @@ func (h *APIHandler) failRun(w http.ResponseWriter, r *http.Request) {
 	runID, err := uuid.Parse(mux.Vars(r)["run_id"])
 	if err != nil {
 		renderAPIError(w, http.StatusNotFound, err)
+		return
+	}
+
+	run, err := h.db.GetRun(r.Context(), runID)
+	if err != nil {
+		renderAPIError(w, http.StatusInternalServerError, fmt.Errorf("getting run: %w", err))
+		return
+	}
+	if !run.FinishedAt.IsZero() {
+		renderAPIError(w, http.StatusBadRequest, errors.New("cannot fail already finished run"))
 		return
 	}
 
