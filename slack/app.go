@@ -138,7 +138,7 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 	packageName := args[1]
 	args = args[2:]
 
-	pkg, err := s.getPackage(packageName)
+	_, err = s.getPackage(packageName)
 	if err != nil {
 		message := &slack.Msg{
 			Text: fmt.Sprintf(":warning: Failed to schedule test run for package %s: *%s*", packageName, err),
@@ -178,14 +178,14 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 		Ts:         json.Number(strconv.FormatInt(run.EnqueuedAt.Unix(), 10)),
 	}
 
-	var options []string
-	for _, option := range pkg.Options {
-		options = append(options, fmt.Sprintf("`%s`", option.String()))
-	}
-	if len(options) > 0 {
+	if len(run.Args) > 0 {
+		var args []string
+		for _, a := range run.Args {
+			args = append(args, fmt.Sprintf("`%s`", a))
+		}
 		runDetail.Fields = append(runDetail.Fields, slack.AttachmentField{
-			Title: "Options",
-			Value: strings.Join(options, "\n"),
+			Title: "Args",
+			Value: strings.Join(args, "\n"),
 		})
 	}
 
@@ -231,14 +231,14 @@ func (a *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 		return fmt.Errorf("firing slack alert: %w", err)
 	}
 
-	var options []string
-	for _, option := range pkg.Options {
-		options = append(options, fmt.Sprintf("`%s`", option.String()))
-	}
-	if len(options) > 0 {
+	if len(alert.Run.Args) > 0 {
+		var args []string
+		for _, a := range alert.Run.Args {
+			args = append(args, fmt.Sprintf("`%s`", a))
+		}
 		testDetail.Fields = append(testDetail.Fields, slack.AttachmentField{
-			Title: "Options",
-			Value: strings.Join(options, "\n"),
+			Title: "Args",
+			Value: strings.Join(args, "\n"),
 		})
 	}
 
