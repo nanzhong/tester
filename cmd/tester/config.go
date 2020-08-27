@@ -13,7 +13,5 @@ type schedulerConfig struct {
 }
 
 type slackConfig struct {
-	Username      string `json:"username"`
-	WebhookURL    string `json:"webhook_url"`
-	SigningSecret string `json:"signing_secret"`
+	CustomChannels map[string][]string `json:"custom_channels"`
 }

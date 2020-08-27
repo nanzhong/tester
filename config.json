@@ -1,0 +1,34 @@
+{
+  "packages": [
+    {
+      "name": "db",
+      "path": "db.test",
+      "options": [
+        {
+          "name": "test.timeout",
+          "description": "Maximum time tests can run for",
+          "default": "1m"
+        }
+      ]
+    },
+    {
+      "name": "example",
+      "path": "example.test",
+      "options": [
+        {
+          "name": "test.timeout",
+          "description": "Maximum time tests can run for",
+          "default": "1m"
+        }
+      ]
+    }
+  ],
+  "scheduler": {
+    "run_timeout": "1m"
+  },
+  "slack": {
+    "custom_channels": {
+      "example": [ "alerts-example" ]
+    }
+  }
+}
