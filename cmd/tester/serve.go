@@ -102,6 +102,9 @@ var serveCmd = &cobra.Command{
 			if cfg.Slack.SigningSecret != "" {
 				opts = append(opts, slack.WithSigningSecret(cfg.Slack.SigningSecret))
 			}
+			if cfg.Slack.CustomChannels != nil {
+				opts = append(opts, slack.WithCustomChannels(cfg.Slack.CustomChannels))
+			}
 			slackApp = slack.NewApp(cfg.Packages, opts...)
 			alertManager.RegisterAlerter(slackApp)
 			httpOpts = append(httpOpts, testerhttp.WithSlackApp(slackApp))

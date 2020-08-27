@@ -14,12 +14,14 @@ import (
 	"github.com/nanzhong/tester/alerting"
 	"github.com/nanzhong/tester/scheduler"
 	"github.com/nlopes/slack"
+	"golang.org/x/sync/errgroup"
 )
 
 type options struct {
-	username      string
-	webhookURL    string
-	signingSecret string
+	username       string
+	webhookURL     string
+	signingSecret  string
+	customChannels map[string][]string
 
 	baseURL   string
 	scheduler *scheduler.Scheduler
@@ -51,6 +53,12 @@ func WithSigningSecret(signingSecret string) Option {
 	}
 }
 
+func WithCustomChannels(channels map[string][]string) Option {
+	return func(opts *options) {
+		opts.customChannels = channels
+	}
+}
+
 func WithScheduler(scheduler *scheduler.Scheduler) Option {
 	return func(opts *options) {
 		opts.scheduler = scheduler
@@ -60,12 +68,7 @@ func WithScheduler(scheduler *scheduler.Scheduler) Option {
 type App struct {
 	packages []tester.Package
 
-	username      string
-	webhookURL    string
-	signingSecret string
-
-	baseURL   string
-	scheduler *scheduler.Scheduler
+	*options
 
 	usageMessage *slack.Message
 }
@@ -80,13 +83,9 @@ func NewApp(packages []tester.Package, opts ...Option) *App {
 	}
 
 	return &App{
-		packages:      packages,
-		username:      defOpts.username,
-		webhookURL:    defOpts.webhookURL,
-		signingSecret: defOpts.signingSecret,
+		options: defOpts,
 
-		baseURL:   defOpts.baseURL,
-		scheduler: defOpts.scheduler,
+		packages: packages,
 	}
 }
 
@@ -208,7 +207,7 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(message)
 }
 
-func (s *App) Fire(ctx context.Context, alert *alerting.Alert) error {
+func (a *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 	testLink := fmt.Sprintf("%s/tests/%s", alert.BaseURL, alert.Test.ID)
 
 	messageText := slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf(":warning: *FAIL* - %s\n%s", alert.Test.Result.Name, testLink), false, false)
@@ -236,7 +235,7 @@ func (s *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 		Ts:         json.Number(strconv.FormatInt(alert.Test.Result.FinishedAt.Unix(), 10)),
 	}
 
-	pkg, err := s.getPackage(alert.Test.Package)
+	pkg, err := a.getPackage(alert.Test.Package)
 	if err != nil {
 		return fmt.Errorf("firing slack alert: %w", err)
 	}
@@ -252,15 +251,27 @@ func (s *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 		})
 	}
 
-	err = slack.PostWebhook(s.webhookURL, &slack.WebhookMessage{
-		Username: s.username,
-		Blocks: []slack.Block{
-			messageSection,
-		},
-		Attachments: []slack.Attachment{
-			testDetail,
-		},
-	})
+	channels, ok := a.customChannels[pkg.Name]
+	if !ok {
+		channels = []string{""}
+	}
+
+	var eg errgroup.Group
+	for _, channel := range channels {
+		eg.Go(func() error {
+			return slack.PostWebhook(a.webhookURL, &slack.WebhookMessage{
+				Username: a.username,
+				Channel:  channel,
+				Blocks: []slack.Block{
+					messageSection,
+				},
+				Attachments: []slack.Attachment{
+					testDetail,
+				},
+			})
+		})
+	}
+	err = eg.Wait()
 	if err != nil {
 		return fmt.Errorf("firing slack alert: %w", err)
 	}
