@@ -87,20 +87,16 @@ var serveCmd = &cobra.Command{
 		httpOpts = append(httpOpts, testerhttp.WithAlertManager(alertManager))
 
 		var slackApp *slack.App
-		if cfg.Slack != nil {
+		if viper.GetString("serve-slack-username") != "" &&
+			viper.GetString("serve-slack-webhook-url") != "" &&
+			viper.GetString("serve-slack-signing-secret") != "" {
 			log.Print("configuring slack")
 			opts := []slack.Option{
 				slack.WithScheduler(scheduler),
 				slack.WithBaseURL(baseURL),
-			}
-			if cfg.Slack.Username != "" {
-				opts = append(opts, slack.WithUsername(cfg.Slack.Username))
-			}
-			if cfg.Slack.WebhookURL != "" {
-				opts = append(opts, slack.WithWebhookURL(cfg.Slack.WebhookURL))
-			}
-			if cfg.Slack.SigningSecret != "" {
-				opts = append(opts, slack.WithSigningSecret(cfg.Slack.SigningSecret))
+				slack.WithUsername(viper.GetString("serve-slack-username")),
+				slack.WithWebhookURL(viper.GetString("serve-slack-webhook-url")),
+				slack.WithSigningSecret(viper.GetString("serve-slack-signing-secret")),
 			}
 			if cfg.Slack.CustomChannels != nil {
 				opts = append(opts, slack.WithCustomChannels(cfg.Slack.CustomChannels))
@@ -189,6 +185,13 @@ func init() {
 
 	serveCmd.Flags().String("api-key", "", "Symmetric key for API Auth")
 	viper.BindPFlag("serve-api-key", serveCmd.Flags().Lookup("api-key"))
+
+	serveCmd.Flags().String("slack-username", "", "Slack username")
+	viper.BindPFlag("serve-slack-username", serveCmd.Flags().Lookup("slack-username"))
+	serveCmd.Flags().String("slack-webhook-url", "", "Slack webhook url")
+	viper.BindPFlag("serve-slack-webhook-url", serveCmd.Flags().Lookup("slack-webhook-url"))
+	serveCmd.Flags().String("slack-signing-secret", "", "Slack signing secret")
+	viper.BindPFlag("serve-slack-signing-secret", serveCmd.Flags().Lookup("slack-signing-secret"))
 
 	serveCmd.Flags().String("okta-session-key", "", "Okta session key")
 	viper.BindPFlag("serve-okta-session-key", serveCmd.Flags().Lookup("okta-session-key"))

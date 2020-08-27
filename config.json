@@ -27,8 +27,8 @@
     "run_timeout": "1m"
   },
   "slack": {
-    "signing_secret": "66f766c23622c411af8df7416ccf8939",
-    "username": "tester",
-    "webhook_url": "https://hooks.slack.com/services/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"
+    "custom_channels": {
+      "example": [ "#alerts-example" ]
+    }
   }
 }
