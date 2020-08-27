@@ -1,0 +1,34 @@
+{
+  "packages": [
+    {
+      "name": "db",
+      "path": "db.test",
+      "options": [
+        {
+          "name": "test.timeout",
+          "description": "Maximum time tests can run for",
+          "default": "1m"
+        }
+      ]
+    },
+    {
+      "name": "example",
+      "path": "example.test",
+      "options": [
+        {
+          "name": "test.timeout",
+          "description": "Maximum time tests can run for",
+          "default": "1m"
+        }
+      ]
+    }
+  ],
+  "scheduler": {
+    "run_timeout": "1m"
+  },
+  "slack": {
+    "signing_secret": "66f766c23622c411af8df7416ccf8939",
+    "username": "tester",
+    "webhook_url": "https://hooks.slack.com/services/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"
+  }
+}
