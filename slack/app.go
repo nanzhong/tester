@@ -138,7 +138,7 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 	packageName := args[1]
 	args = args[2:]
 
-	pkg, err := s.getPackage(packageName)
+	_, err = s.getPackage(packageName)
 	if err != nil {
 		message := &slack.Msg{
 			Text: fmt.Sprintf(":warning: Failed to schedule test run for package %s: *%s*", packageName, err),
@@ -159,8 +159,9 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	runURL := fmt.Sprintf("%s/runs/%s", s.baseURL, run.ID)
 
-	messageText := slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf(":traffic_light:  *NEW* - Started new test run for package %s\n%s", packageName, runURL), false, false)
-	messageSection := slack.NewSectionBlock(messageText, nil, nil)
+	messageText := fmt.Sprintf(":traffic_light:  *NEW* - Started new test run for package %s\n%s", packageName, runURL)
+	messageTextBlock := slack.NewTextBlockObject(slack.MarkdownType, messageText, false, false)
+	messageSection := slack.NewSectionBlock(messageTextBlock, nil, nil)
 
 	runDetail := slack.Attachment{
 		Color:     "#80cee1",
@@ -178,20 +179,21 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 		Ts:         json.Number(strconv.FormatInt(run.EnqueuedAt.Unix(), 10)),
 	}
 
-	var options []string
-	for _, option := range pkg.Options {
-		options = append(options, fmt.Sprintf("`%s`", option.String()))
-	}
-	if len(options) > 0 {
+	if len(run.Args) > 0 {
+		var args []string
+		for _, a := range run.Args {
+			args = append(args, fmt.Sprintf("`%s`", a))
+		}
 		runDetail.Fields = append(runDetail.Fields, slack.AttachmentField{
-			Title: "Options",
-			Value: strings.Join(options, "\n"),
+			Title: "Args",
+			Value: strings.Join(args, "\n"),
 		})
 	}
 
 	message := slack.NewBlockMessage(
 		messageSection,
 	)
+	message.Text = messageText
 	message.ResponseType = slack.ResponseTypeInChannel
 	message.Attachments = append(message.Attachments, runDetail)
 
@@ -201,8 +203,9 @@ func (s *App) HandleSlackCommand(w http.ResponseWriter, r *http.Request) {
 func (a *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 	testLink := fmt.Sprintf("%s/tests/%s", alert.BaseURL, alert.Test.ID)
 
-	messageText := slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf(":warning: *FAIL* - %s\n%s", alert.Test.Result.Name, testLink), false, false)
-	messageSection := slack.NewSectionBlock(messageText, nil, nil)
+	message := fmt.Sprintf(":warning: *FAIL* - %s\n%s", alert.Test.Result.Name, testLink)
+	messageTextBlock := slack.NewTextBlockObject(slack.MarkdownType, message, false, false)
+	messageSection := slack.NewSectionBlock(messageTextBlock, nil, nil)
 
 	testDetail := slack.Attachment{
 		Color:     "#ff005f",
@@ -231,14 +234,14 @@ func (a *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 		return fmt.Errorf("firing slack alert: %w", err)
 	}
 
-	var options []string
-	for _, option := range pkg.Options {
-		options = append(options, fmt.Sprintf("`%s`", option.String()))
-	}
-	if len(options) > 0 {
+	if len(alert.Run.Args) > 0 {
+		var args []string
+		for _, a := range alert.Run.Args {
+			args = append(args, fmt.Sprintf("`%s`", a))
+		}
 		testDetail.Fields = append(testDetail.Fields, slack.AttachmentField{
-			Title: "Options",
-			Value: strings.Join(options, "\n"),
+			Title: "Args",
+			Value: strings.Join(args, "\n"),
 		})
 	}
 
@@ -254,6 +257,7 @@ func (a *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 		eg.Go(func() error {
 			_, _, err := api.PostMessage(
 				channel,
+				slack.MsgOptionText(message, false),
 				slack.MsgOptionBlocks(messageSection),
 				slack.MsgOptionAttachments(testDetail),
 			)

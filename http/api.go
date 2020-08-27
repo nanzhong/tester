@@ -105,7 +105,7 @@ func (h *APIHandler) submitTest(w http.ResponseWriter, r *http.Request) {
 
 	if test.Result.State == tester.TBStateFailed {
 		go func() {
-			err := h.alertManager.Fire(context.Background(), &alerting.Alert{Test: &test})
+			err := h.alertManager.Fire(context.Background(), &alerting.Alert{Run: run, Test: &test})
 			if err != nil {
 				log.Printf("failed to fire alert: %s", err)
 			}

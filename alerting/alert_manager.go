@@ -9,6 +9,7 @@ import (
 )
 
 type Alert struct {
+	Run  *tester.Run
 	Test *tester.Test
 
 	BaseURL string
