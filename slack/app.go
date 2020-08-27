@@ -13,13 +13,12 @@ import (
 	"github.com/nanzhong/tester"
 	"github.com/nanzhong/tester/alerting"
 	"github.com/nanzhong/tester/scheduler"
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 	"golang.org/x/sync/errgroup"
 )
 
 type options struct {
-	username       string
-	webhookURL     string
+	accessToken    string
 	signingSecret  string
 	customChannels map[string][]string
 
@@ -35,15 +34,9 @@ func WithBaseURL(url string) Option {
 	}
 }
 
-func WithUsername(username string) Option {
+func WithAccessToken(token string) Option {
 	return func(opts *options) {
-		opts.username = username
-	}
-}
-
-func WithWebhookURL(webhookURL string) Option {
-	return func(opts *options) {
-		opts.webhookURL = webhookURL
+		opts.accessToken = token
 	}
 }
 
@@ -74,9 +67,7 @@ type App struct {
 }
 
 func NewApp(packages []tester.Package, opts ...Option) *App {
-	defOpts := &options{
-		username: "tester",
-	}
+	defOpts := &options{}
 
 	for _, opt := range opts {
 		opt(defOpts)
@@ -256,19 +247,17 @@ func (a *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 		channels = []string{""}
 	}
 
+	api := slack.New(a.accessToken)
+
 	var eg errgroup.Group
 	for _, channel := range channels {
 		eg.Go(func() error {
-			return slack.PostWebhook(a.webhookURL, &slack.WebhookMessage{
-				Username: a.username,
-				Channel:  channel,
-				Blocks: []slack.Block{
-					messageSection,
-				},
-				Attachments: []slack.Attachment{
-					testDetail,
-				},
-			})
+			_, _, err := api.PostMessage(
+				channel,
+				slack.MsgOptionBlocks(messageSection),
+				slack.MsgOptionAttachments(testDetail),
+			)
+			return err
 		})
 	}
 	err = eg.Wait()
