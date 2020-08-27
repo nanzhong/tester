@@ -28,7 +28,7 @@
   },
   "slack": {
     "custom_channels": {
-      "example": [ "#alerts-example" ]
+      "example": [ "alerts-example" ]
     }
   }
 }
