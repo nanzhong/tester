@@ -13,5 +13,6 @@ type schedulerConfig struct {
 }
 
 type slackConfig struct {
-	CustomChannels map[string][]string `json:"custom_channels"`
+	DefaultChannels []string            `json:"default_channels"`
+	CustomChannels  map[string][]string `json:"custom_channels"`
 }
