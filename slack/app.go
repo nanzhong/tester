@@ -261,6 +261,7 @@ func (a *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 
 	var eg errgroup.Group
 	for _, channel := range channels {
+		channel := channel
 		eg.Go(func() error {
 			_, _, err := api.PostMessage(
 				channel,
