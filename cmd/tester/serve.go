@@ -95,6 +95,7 @@ var serveCmd = &cobra.Command{
 				slack.WithBaseURL(baseURL),
 				slack.WithAccessToken(viper.GetString("serve-slack-access-token")),
 				slack.WithSigningSecret(viper.GetString("serve-slack-signing-secret")),
+				slack.WithDefaultChannels(cfg.Slack.DefaultChannels),
 			}
 			if cfg.Slack.CustomChannels != nil {
 				opts = append(opts, slack.WithCustomChannels(cfg.Slack.CustomChannels))

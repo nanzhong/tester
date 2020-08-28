@@ -18,9 +18,10 @@ import (
 )
 
 type options struct {
-	accessToken    string
-	signingSecret  string
-	customChannels map[string][]string
+	accessToken     string
+	signingSecret   string
+	defaultChannels []string
+	customChannels  map[string][]string
 
 	baseURL   string
 	scheduler *scheduler.Scheduler
@@ -43,6 +44,12 @@ func WithAccessToken(token string) Option {
 func WithSigningSecret(signingSecret string) Option {
 	return func(opts *options) {
 		opts.signingSecret = signingSecret
+	}
+}
+
+func WithDefaultChannels(channels []string) Option {
+	return func(opts *options) {
+		opts.defaultChannels = channels
 	}
 }
 
@@ -247,7 +254,7 @@ func (a *App) Fire(ctx context.Context, alert *alerting.Alert) error {
 
 	channels, ok := a.customChannels[pkg.Name]
 	if !ok {
-		channels = []string{""}
+		channels = append(channels, a.defaultChannels...)
 	}
 
 	api := slack.New(a.accessToken)

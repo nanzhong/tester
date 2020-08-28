@@ -27,6 +27,7 @@
     "run_timeout": "1m"
   },
   "slack": {
+    "default_channels": [ "alerts" ],
     "custom_channels": {
       "example": [ "alerts-example" ]
     }
