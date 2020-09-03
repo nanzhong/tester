@@ -1,0 +1,179 @@
+<div class="overall">
+  <h1 class="h3">Overall Results <small class="text-muted">(last 30d)</small></h1>
+
+  <div class="row">
+    <div class="col">
+      <div class="border p-1">
+        <div class="d-flex">
+          {{range .MonthSummaries}}
+          <div class="flex-grow-1" style="margin: 1px; min-width: 2px; min-height: 40px; max-height: 40px;"
+               data-toggle="popover"
+               data-trigger="hover"
+               data-placement="bottom"
+               data-html="true"
+               data-title="<small>{{.Time | formatTime}} <small>(1h)</small></small>"
+               data-content="
+                             <div>
+                               <div class='row'>
+                                 <div class='col'><strong>Runs</strong></div>
+                               </div>
+                               <div class='row'>
+                                 <div class='col'>Total: {{.NumRuns}} {{if .NumErrorRuns}}<small>({{.NumErrorRuns}} erred)</small>{{end}}</div>
+                               </div>
+                               <hr>
+                               <div class='row'>
+                                 <div class='col'><strong>Tests</strong></div>
+                               </div>
+                               <div class='row'>
+                                 <div class='col-5'>Passed</div>
+                                 <div class='col-7'>{{.NumPassedTests}} <small>({{.PercentPassedTests | formatPercent | printf "%0.1f"}}%)</small></div>
+                               </div>
+                               <div class='row'>
+                                 <div class='col-5'>Skipped</div>
+                                 <div class='col-7'>{{.NumSkippedTests}} <small>({{.PercentSkippedTests | formatPercent | printf "%0.1f"}}%)</small></div>
+                               </div>
+                               <div class='row'>
+                                 <div class='col-5'>Failed</div>
+                                 <div class='col-7'>{{.NumFailedTests}} <small>({{.PercentFailedTests | formatPercent | printf "%0.1f"}}%)</small></div>
+                               </div>
+                             </div>"
+          >
+            <a href="/run_summary?begin={{.Time.Unix}}&window={{.Duration.Seconds}}">
+              <div class="bg-danger bg-gradient" style="min-height: {{.PercentFailedTests | formatPercent}}%;"></div>
+              <div class="bg-warning bg-gradient" style="min-height: {{.PercentSkippedTests | formatPercent}}%;"></div>
+              <div class="bg-success bg-gradient" style="min-height: {{.PercentPassedTests | formatPercent}}%;"></div>
+            </a>
+          </div>
+          {{end}}
+        </div>
+        <div class="d-flex justify-content-between">
+          <div><small class="text-muted">30d <span style="font-size: 60%;">(every 12h)</span></small></div>
+          <div><small class="text-muted">now</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<div class="packages">
+  <h1 class="h3">Results by Package  <small class="text-muted">(last 24h)</small></h1>
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3">
+    {{range .Packages}}
+    {{$pkg := .}}
+    <div class="col mb-2">
+      <h2 class="h4"><a href="/packages/{{$pkg}}">{{$pkg}}</a></h2>
+
+      <div class="border p-1">
+        <div class="d-flex">
+          {{range $.DaySummaries}}
+          {{$pkgSummary := index .PackageSummary $pkg}}
+            <div class="flex-grow-1" style="margin: 2px; min-width: 5px; min-height: 40px; max-height: 40px;"
+                 data-toggle="popover"
+                 data-trigger="hover"
+                 data-placement="bottom"
+                 data-html="true"
+                 data-title="<small>{{.Time | formatTime}} <small>(1h)</small></small>"
+                 data-content="
+                               <div>
+                                 <div class='row'>
+                                   <div class='col'><strong>Runs</strong></div>
+                                 </div>
+                                 <div class='row'>
+                                   <div class='col'>Total: {{len $pkgSummary.RunIDs}} {{if len $pkgSummary.ErrorRunIDs}}<small>({{len $pkgSummary.ErrorRunIDs}} erred)</small>{{end}}</div>
+                                 </div>
+                                 <hr>
+                                 <div class='row'>
+                                   <div class='col'><strong>Tests</strong></div>
+                                 </div>
+                                 <div class='row'>
+                                   <div class='col-5'>Passed</div>
+                                   <div class='col-7'>{{$pkgSummary.NumPassedTests}} <small>({{$pkgSummary.PercentPassedTests | formatPercent | printf "%0.1f"}}%)</small></div>
+                                 </div>
+                                 <div class='row'>
+                                   <div class='col-5'>Skipped</div>
+                                   <div class='col-7'>{{$pkgSummary.NumSkippedTests}} <small>({{$pkgSummary.PercentSkippedTests | formatPercent | printf "%0.1f"}}%)</small></div>
+                                 </div>
+                                 <div class='row'>
+                                   <div class='col-5'>Failed</div>
+                                   <div class='col-7'>{{$pkgSummary.NumFailedTests}} <small>({{$pkgSummary.PercentFailedTests | formatPercent | printf "%0.1f"}}%)</small></div>
+                                 </div>
+                               </div>"
+                               >
+              <a href="/run_summary?package={{$pkg}}&begin={{.Time.Unix}}&window={{.Duration.Seconds}}">
+                <div style="min-height: 20px;"></div>
+                {{if not $pkgSummary}}
+                <div class="bg-light" style="min-height: 100%;"></div>
+                {{else}}
+                <div class="bg-danger bg-gradient" style="min-height: {{$pkgSummary.PercentFailedTests | formatPercent}}%;"></div>
+                <div class="bg-warning bg-gradient" style="min-height: {{$pkgSummary.PercentSkippedTests | formatPercent}}%;"></div>
+                <div class="bg-success bg-gradient" style="min-height: {{$pkgSummary.PercentPassedTests | formatPercent}}%;"></div>
+                {{end}}
+              </a>
+            </div>
+          {{end}}
+
+          {{range $.HourSummaries}}
+          {{$pkgSummary := index .PackageSummary $pkg}}
+          <div class="flex-grow-1" style="margin: 2px; min-width: 5px; min-height: 60px;"
+               {{if $pkgSummary}}
+               data-toggle="popover"
+               data-trigger="hover"
+               data-placement="bottom"
+               data-html="true"
+               data-title="<small>{{.Time | formatTime}} <small>(5m)</small></small>"
+               data-content="
+                             <div>
+                               <div class='row'>
+                                 <div class='col'><strong>Runs</strong></div>
+                               </div>
+                               <div class='row'>
+                                 <div class='col'>Total: {{len $pkgSummary.RunIDs}} {{if len $pkgSummary.ErrorRunIDs}}<small>({{len $pkgSummary.ErrorRunIDs}} erred)</small>{{end}}</div>
+                               </div>
+                               <hr>
+                               <div class='row'>
+                                 <div class='col'><strong>Tests</strong></div>
+                               </div>
+                               <div class='row'>
+                                 <div class='col-5'>Passed</div>
+                                 <div class='col-7'>{{$pkgSummary.NumPassedTests}} <small>({{$pkgSummary.PercentPassedTests | formatPercent | printf "%0.1f"}}%)</small></div>
+                               </div>
+                               <div class='row'>
+                                 <div class='col-5'>Skipped</div>
+                                 <div class='col-7'>{{$pkgSummary.NumSkippedTests}} <small>({{$pkgSummary.PercentSkippedTests | formatPercent | printf "%0.1f"}}%)</small></div>
+                               </div>
+                               <div class='row'>
+                                 <div class='col-5'>Failed</div>
+                                 <div class='col-7'>{{$pkgSummary.NumFailedTests}} <small>({{$pkgSummary.PercentFailedTests | formatPercent | printf "%0.1f"}}%)</small></div>
+                               </div>
+                             </div>"
+                             {{end}}
+                             >
+            <a href="/run_summary?package={{$pkg}}&begin={{.Time.Unix}}&window={{.Duration.Seconds}}">
+              {{if not $pkgSummary}}
+              <div class="bg-light" style="min-height: 100%;"></div>
+              {{else}}
+              <div class="bg-danger bg-gradient" style="min-height: {{$pkgSummary.PercentFailedTests | formatPercent}}%;"></div>
+              <div class="bg-warning bg-gradient" style="min-height: {{$pkgSummary.PercentSkippedTests | formatPercent}}%;"></div>
+              <div class="bg-success bg-gradient" style="min-height: {{$pkgSummary.PercentPassedTests | formatPercent}}%;"></div>
+              {{end}}
+            </a>
+          </div>
+          {{end}}
+        </div>
+        <div class="d-flex">
+          <div style="width: 65%;"><small class="text-muted">24h <span style="font-size: 60%;">(every 1h)</span></small></div>
+          <div class="flex-grow-1"><small class="text-muted">1h <span style="font-size: 60%;">(every 5m)</span></small></div>
+          <div><small class="text-muted">now</small></div>
+        </div>
+      </div>
+    </div>
+    {{else}}
+    <div class="col">
+      <h5>No results yet</h5>
+      <p>Kick off a test run and publish the results...</p>
+    </div>
+    {{end}}
+  </div>
+</div>

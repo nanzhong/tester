@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nanzhong/tester"
@@ -30,4 +31,5 @@ type DB interface {
 	ListPendingRuns(ctx context.Context) ([]*tester.Run, error)
 	ListFinishedRuns(ctx context.Context, limit int) ([]*tester.Run, error)
 	ListRunsForPackage(ctx context.Context, pkg string, limit int) ([]*tester.Run, error)
+	ListRunSummariesForRange(ctx context.Context, begin, end time.Time, window time.Duration) ([]*tester.RunSummary, error)
 }
