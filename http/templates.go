@@ -148,6 +148,9 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 			}
 			return d.Round(time.Second).String()
 		},
+		"formatPercent": func(f float64) float64 {
+			return f * 100
+		},
 		"formatLogs": func(logData []tester.TBLog) string {
 			var b strings.Builder
 			for _, l := range logData {

@@ -1,0 +1,83 @@
+{{$filterPackage := .Package}}
+<div class="run-summary">
+  <h1 class="h3">Run Results <small class="text-muted">{{.RunSummary.Time | formatTime}} ({{.RunSummary.Duration | formatDuration}})</small></h1>
+
+  {{range $pkg, $summary := .RunSummary.PackageSummary}}
+  {{if (or (not $filterPackage) (eq $pkg $filterPackage))}}
+  <div class="row mb-2">
+    <div class="col">
+      <h2 class="h4"><a href="/packages/{{$pkg}}">{{$pkg}}</a> <small class="text-muted" style="font-size: 60%;">{{len $summary.RunIDs}} Runs {{if $summary.ErrorRunIDs}}({{len $summary.ErrorRunIDs}} erred){{end}}</small></h2>
+
+      <h3 class="h6">Tests</h3>
+      <div class="row" style="font-size: 75%;">
+        <div class="col-12 col-md-6 mb-2">
+          <strong>Passed</small></strong>
+          <ul class="list-group mt-2">
+            {{range $name, $testIDs := $summary.PassedTests}}
+            <li class="list-group-item">
+              <div class="d-flex justify-content-between align-items-center">
+                <a data-toggle="collapse" href="#{{$pkg}}-{{$name}}-passed">{{$name}}</a>
+                <span class="badge bg-success rounded-pill">{{len $testIDs}}</span>
+              </div>
+
+              <div id="{{$pkg}}-{{$name}}-passed" class="collapse mt-2">
+                <div class="list-group" style="max-height: 400px; overflow-y: auto;">
+                  {{range $testIDs}}
+                  <div class="list-group-item">
+                    <a href='/tests/{{.}}'>{{.}}</a>
+                  </div>
+                  {{end}}
+                </div>
+              </div>
+            </li>
+            {{end}}
+          </ul>
+        </div>
+
+        <div class="col-12 col-md-6 mb-2">
+          <strong>Failed / Skipped</strong>
+          <ul class="list-group mt-2">
+            {{range $name, $testIDs := $summary.FailedTests}}
+            <li class="list-group-item">
+              <div class="d-flex justify-content-between align-items-center">
+                <a data-toggle="collapse" href="#{{$pkg}}-{{$name}}-failed">{{$name}}</a>
+                <span class="badge bg-danger rounded-pill">{{len $testIDs}}</span>
+              </div>
+
+              <div id="{{$pkg}}-{{$name}}-failed" class="collapse mt-2">
+                <div class="list-group" style="max-height: 400px; overflow-y: auto;">
+                  {{range $testIDs}}
+                  <div class="list-group-item">
+                    <a href='/tests/{{.}}'>{{.}}</a>
+                  </div>
+                  {{end}}
+                </div>
+              </div>
+            </li>
+            {{end}}
+            {{range $name, $testIDs := $summary.SkippedTests}}
+            <li class="list-group-item">
+              <div class="d-flex justify-content-between align-items-center">
+                <a data-toggle="collapse" href="#{{$pkg}}-{{$name}}-skipped">{{$name}}</a>
+                <span class="badge bg-warning rounded-pill">{{len $testIDs}}</span>
+              </div>
+
+              <div id="{{$pkg}}-{{$name}}-skipped" class="collapse mt-2">
+                <div class="list-group" style="max-height: 400px; overflow-y: auto;">
+                  {{range $testIDs}}
+                  <div class="list-group-item">
+                    <a href='/tests/{{.}}'>{{.}}</a>
+                  </div>
+                  {{end}}
+                </div>
+              </div>
+            </li>
+            {{end}}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  {{end}}
+  {{end}}
+</div>

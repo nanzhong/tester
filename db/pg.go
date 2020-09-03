@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -155,6 +156,10 @@ func (p *PG) ListTests(ctx context.Context, limit int) ([]*tester.Test, error) {
 
 func (p *PG) ListTestsForPackage(ctx context.Context, pkg string, limit int) ([]*tester.Test, error) {
 	return p.listTests(ctx, p.pool, sq.Eq{"package": pkg}, limit)
+}
+
+func (p *PG) ListTestsInDateRange(ctx context.Context, from, to time.Time) ([]*tester.Test, error) {
+	return p.listTests(ctx, p.pool, nil, 0)
 }
 
 func (p *PG) EnqueueRun(ctx context.Context, run *tester.Run) error {
@@ -375,4 +380,124 @@ func (p *PG) ListRunsForPackage(ctx context.Context, pkg string, limit int) ([]*
 		return nil, err
 	}
 	return runs, nil
+}
+
+func (p *PG) ListRunSummariesForRange(ctx context.Context, begin, end time.Time, window time.Duration) ([]*tester.RunSummary, error) {
+	buckets := int(math.Ceil(float64(end.Sub(begin)) / float64(window)))
+	summaries := make([]*tester.RunSummary, buckets)
+	for i := 0; i < buckets; i++ {
+		summaries[i] = &tester.RunSummary{
+			Time:           begin.Add(time.Duration(i) * window),
+			Duration:       window,
+			PackageSummary: make(map[string]*tester.PackageSummary),
+		}
+	}
+
+	err := p.tx(ctx, func(tx pgx.Tx) error {
+		q := psq.Select("runs.package", "runs.id", "runs.started_at", "runs.error", "tests.id", "tests.result").
+			From("tests").
+			Join("runs ON tests.run_id = runs.id").
+			Where("runs.started_at IS NOT NULL").
+			Where("runs.started_at >= ?", begin).
+			Where("runs.finished_at IS NOT NULL").
+			Where("runs.finished_at <= ?", end).
+			OrderBy("runs.started_at ASC")
+
+		query, args, err := q.ToSql()
+		if err != nil {
+			return err
+		}
+
+		rows, err := tx.Query(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var (
+				packageName  string
+				runID        uuid.UUID
+				runStartedAt time.Time
+				runError     sql.NullString
+				testID       uuid.UUID
+				result       tester.T
+			)
+			err := rows.Scan(&packageName, &runID, &runStartedAt, &runError, &testID, &result)
+			if err != nil {
+				return err
+			}
+
+			bucketIndex := int(runStartedAt.Sub(begin) / window)
+			summary := summaries[bucketIndex]
+
+			packageSummary, ok := summary.PackageSummary[packageName]
+			if !ok {
+				packageSummary = &tester.PackageSummary{
+					Package:      packageName,
+					PassedTests:  make(map[string][]uuid.UUID),
+					FailedTests:  make(map[string][]uuid.UUID),
+					SkippedTests: make(map[string][]uuid.UUID),
+				}
+				summary.PackageSummary[packageName] = packageSummary
+			}
+
+			// NOTE(nan) we blindly add here and uniquify later.
+			if runError.Valid {
+				packageSummary.ErrorRunIDs = append(packageSummary.ErrorRunIDs, runID)
+				continue
+			}
+			packageSummary.RunIDs = append(packageSummary.RunIDs, runID)
+
+			switch result.State {
+			case tester.TBStatePassed:
+				packageSummary.PassedTests[result.Name] = append(packageSummary.PassedTests[result.Name], testID)
+			case tester.TBStateFailed:
+				packageSummary.FailedTests[result.Name] = append(packageSummary.FailedTests[result.Name], testID)
+			case tester.TBStateSkipped:
+				packageSummary.SkippedTests[result.Name] = append(packageSummary.SkippedTests[result.Name], testID)
+			}
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, summary := range summaries {
+		for _, packageSummary := range summary.PackageSummary {
+			if len(packageSummary.RunIDs) == 0 {
+				continue
+			}
+
+			uniqueRunIDs := make(map[uuid.UUID]struct{})
+			for _, id := range packageSummary.RunIDs {
+				if _, exists := uniqueRunIDs[id]; exists {
+					continue
+				}
+				uniqueRunIDs[id] = struct{}{}
+			}
+
+			var runIDs []uuid.UUID
+			for id := range uniqueRunIDs {
+				runIDs = append(runIDs, id)
+			}
+			packageSummary.RunIDs = runIDs
+
+			uniqueErrorRunIDs := make(map[uuid.UUID]struct{})
+			for _, id := range packageSummary.ErrorRunIDs {
+				if _, exists := uniqueErrorRunIDs[id]; exists {
+					continue
+				}
+				uniqueErrorRunIDs[id] = struct{}{}
+			}
+
+			var errorRunIDs []uuid.UUID
+			for id := range uniqueErrorRunIDs {
+				errorRunIDs = append(errorRunIDs, id)
+			}
+			packageSummary.ErrorRunIDs = errorRunIDs
+		}
+	}
+	return summaries, nil
 }

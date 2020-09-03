@@ -221,3 +221,197 @@ func TestPG_Run(t *testing.T) {
 		})
 	})
 }
+
+func TestPG_ListRunSummariesForRange(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("creates empty buckets", func(t *testing.T) {
+		withPG(t, func(tb testing.TB, pg *PG) {
+			now := time.Now()
+			summaries, err := pg.ListRunSummariesForRange(ctx, now, now.Add(3*time.Minute+15*time.Second), time.Minute)
+			require.NoError(t, err)
+			assert.Len(t, summaries, 4)
+			for i, summary := range summaries {
+				assert.Equal(t, now.Add(time.Duration(i)*time.Minute), summary.Time)
+				assert.Equal(t, time.Minute, summary.Duration)
+			}
+		})
+	})
+
+	t.Run("places runs in correct buckets", func(t *testing.T) {
+		withPG(t, func(tb testing.TB, pg *PG) {
+			begin := time.Now()
+			end := begin.Add(3 * time.Minute)
+			window := time.Minute
+
+			pkg1run1 := &tester.Run{
+				ID:         uuid.New(),
+				Package:    "pkg-1",
+				EnqueuedAt: begin,
+				StartedAt:  begin,
+				FinishedAt: begin,
+			}
+			err := pg.EnqueueRun(ctx, pkg1run1)
+			require.NoError(t, err)
+
+			pkg1run1.Tests = []*tester.Test{
+				{
+					ID:      uuid.New(),
+					RunID:   pkg1run1.ID,
+					Package: pkg1run1.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-pass", State: tester.TBStatePassed},
+					},
+				},
+				{
+					ID:      uuid.New(),
+					RunID:   pkg1run1.ID,
+					Package: pkg1run1.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-fail", State: tester.TBStateFailed},
+					},
+				},
+				{
+					ID:      uuid.New(),
+					RunID:   pkg1run1.ID,
+					Package: pkg1run1.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-skip", State: tester.TBStateSkipped},
+					},
+				},
+			}
+
+			pkg1run2 := &tester.Run{
+				ID:         uuid.New(),
+				Package:    "pkg-1",
+				EnqueuedAt: begin,
+				StartedAt:  begin.Add(15 * time.Second),
+				FinishedAt: begin,
+			}
+			err = pg.EnqueueRun(ctx, pkg1run2)
+			require.NoError(t, err)
+
+			pkg1run2.Tests = []*tester.Test{
+				{
+					ID:      uuid.New(),
+					RunID:   pkg1run2.ID,
+					Package: pkg1run2.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-pass", State: tester.TBStatePassed},
+					},
+				},
+				{
+					ID:      uuid.New(),
+					RunID:   pkg1run2.ID,
+					Package: pkg1run2.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-fail", State: tester.TBStateFailed},
+					},
+				},
+				{
+					ID:      uuid.New(),
+					RunID:   pkg1run2.ID,
+					Package: pkg1run2.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-skip", State: tester.TBStateSkipped},
+					},
+				},
+			}
+
+			pkg1run3 := &tester.Run{
+				ID:         uuid.New(),
+				Package:    "pkg-1",
+				EnqueuedAt: begin,
+				StartedAt:  begin.Add(2*time.Minute + 15*time.Second),
+				FinishedAt: begin.Add(2*time.Minute + 15*time.Second),
+			}
+			err = pg.EnqueueRun(ctx, pkg1run3)
+			require.NoError(t, err)
+
+			pkg1run3.Tests = []*tester.Test{
+				{
+					ID:      uuid.New(),
+					RunID:   pkg1run3.ID,
+					Package: pkg1run3.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-pass", State: tester.TBStatePassed},
+					},
+				},
+				{
+					ID:      uuid.New(),
+					RunID:   pkg1run3.ID,
+					Package: pkg1run3.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-fail", State: tester.TBStateFailed},
+					},
+				},
+				{
+					ID:      uuid.New(),
+					RunID:   pkg1run3.ID,
+					Package: pkg1run3.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-skip", State: tester.TBStateSkipped},
+					},
+				},
+			}
+
+			pkg2run1 := &tester.Run{
+				ID:         uuid.New(),
+				Package:    "pkg-2",
+				EnqueuedAt: begin,
+				StartedAt:  begin.Add(2*time.Minute + 15*time.Second),
+				FinishedAt: begin.Add(2*time.Minute + 15*time.Second),
+			}
+			err = pg.EnqueueRun(ctx, pkg2run1)
+			require.NoError(t, err)
+
+			pkg2run1.Tests = []*tester.Test{
+				{
+					ID:      uuid.New(),
+					RunID:   pkg2run1.ID,
+					Package: pkg2run1.Package,
+					Result: &tester.T{
+						TB: tester.TB{Name: "test-pass", State: tester.TBStatePassed},
+					},
+				},
+			}
+
+			pkg2run2 := &tester.Run{
+				ID:         uuid.New(),
+				Package:    "pkg-2",
+				EnqueuedAt: begin,
+				StartedAt:  begin.Add(2*time.Minute + 15*time.Second),
+				FinishedAt: begin.Add(2*time.Minute + 15*time.Second),
+				Error:      "failed",
+			}
+			err = pg.EnqueueRun(ctx, pkg2run2)
+			require.NoError(t, err)
+
+			allTests := append(pkg1run1.Tests, pkg1run2.Tests...)
+			allTests = append(allTests, pkg1run3.Tests...)
+			allTests = append(allTests, pkg2run1.Tests...)
+			for _, test := range allTests {
+				err := pg.AddTest(ctx, test)
+				require.NoError(t, err)
+			}
+
+			summaries, err := pg.ListRunSummariesForRange(ctx, begin, end, window)
+			require.NoError(t, err)
+			assert.Len(t, summaries, 3)
+			assert.Equal(t, &tester.RunSummary{
+				Time:     begin,
+				Duration: window,
+				PackageSummary: map[string]*tester.PackageSummary{
+					"pkg-1": {
+						Package:      "pkg-1",
+						RunIDs:       []uuid.UUID{pkg1run1.ID, pkg1run2.ID},
+						ErrorRunIDs:  nil,
+						PassedTests:  map[string][]uuid.UUID{"test-pass": {pkg1run1.Tests[0].ID, pkg1run2.Tests[0].ID}},
+						FailedTests:  map[string][]uuid.UUID{"test-fail": {pkg1run1.Tests[1].ID, pkg1run2.Tests[1].ID}},
+						SkippedTests: map[string][]uuid.UUID{"test-skip": {pkg1run1.Tests[2].ID, pkg1run2.Tests[2].ID}},
+					},
+				},
+			}, summaries[0])
+		})
+	})
+}

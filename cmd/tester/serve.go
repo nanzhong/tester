@@ -127,20 +127,25 @@ var serveCmd = &cobra.Command{
 
 		done := make(chan os.Signal, 1)
 		signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
 		go func() {
 			defer close(done)
 			<-done
 
 			log.Println("shutting down")
 			{
+				cancel()
+
 				// Give one minute for running requests to complete
-				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 				defer cancel()
 
 				var eg errgroup.Group
 				eg.Go(func() error {
 					log.Printf("attempting to shutdown http server")
-					return httpServer.Shutdown(ctx)
+					return httpServer.Shutdown(shutdownCtx)
 				})
 				eg.Go(func() error {
 					log.Printf("attempting to shutdown scheduler")
@@ -158,6 +163,19 @@ var serveCmd = &cobra.Command{
 		eg.Go(func() error {
 			log.Printf("serving on %s", viper.GetString("serve-addr"))
 			return httpServer.Serve(l)
+		})
+		eg.Go(func() error {
+			for {
+				if err := uiHandler.RefreshSummaries(ctx); err != nil {
+					log.Printf("failed to refresh summaries %s", err)
+				}
+
+				select {
+				case <-time.After(time.Minute):
+				case <-ctx.Done():
+					return nil
+				}
+			}
 		})
 		eg.Go(func() error {
 			log.Print("starting scheduler")

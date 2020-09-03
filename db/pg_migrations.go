@@ -1,8 +1,8 @@
 package db
 
-var pgMigrations = []struct{
+var pgMigrations = []struct {
 	name string
-	up string
+	up   string
 	down string
 }{
 	{
@@ -33,6 +33,15 @@ CREATE INDEX ON runs (finished_at);
 `,
 		down: `
 DROP TABLE tests, runs;
+`,
+	},
+	{
+		name: "add index on runs started_at, finished_at",
+		up: `
+CREATE INDEX ON runs (started_at, finished_at);
+`,
+		down: `
+DROP INDEX runs_started_at_finished_at_idx;
 `,
 	},
 }

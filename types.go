@@ -92,3 +92,124 @@ type Option struct {
 func (o *Option) String() string {
 	return fmt.Sprintf("-%s=%s", o.Name, o.Value)
 }
+
+type RunSummary struct {
+	Time           time.Time
+	Duration       time.Duration
+	PackageSummary map[string]*PackageSummary
+}
+
+func (s *RunSummary) NumRuns() int {
+	var total int
+	for _, pkgSummary := range s.PackageSummary {
+		total += len(pkgSummary.RunIDs)
+	}
+	return total
+}
+
+func (s *RunSummary) NumErrorRuns() int {
+	var total int
+	for _, pkgSummary := range s.PackageSummary {
+		total += len(pkgSummary.ErrorRunIDs)
+	}
+	return total
+}
+
+func (s *RunSummary) NumPassedTests() int {
+	var total int
+	for _, pkgSummary := range s.PackageSummary {
+		total += pkgSummary.NumPassedTests()
+	}
+	return total
+}
+
+func (s *RunSummary) PercentPassedTests() float64 {
+	return float64(s.NumPassedTests()) / float64(s.NumTotalTests())
+}
+
+func (s *RunSummary) NumFailedTests() int {
+	var total int
+	for _, pkgSummary := range s.PackageSummary {
+		total += pkgSummary.NumFailedTests()
+	}
+	return total
+}
+
+func (s *RunSummary) PercentFailedTests() float64 {
+	return float64(s.NumFailedTests()) / float64(s.NumTotalTests())
+}
+
+func (s *RunSummary) NumSkippedTests() int {
+	var total int
+	for _, pkgSummary := range s.PackageSummary {
+		total += pkgSummary.NumSkippedTests()
+	}
+	return total
+}
+
+func (s *RunSummary) PercentSkippedTests() float64 {
+	return float64(s.NumSkippedTests()) / float64(s.NumTotalTests())
+}
+
+func (s *RunSummary) NumTotalTests() int {
+	var (
+		passed  int
+		failed  int
+		skipped int
+	)
+	for _, pkgSummary := range s.PackageSummary {
+		passed += pkgSummary.NumPassedTests()
+		failed += pkgSummary.NumFailedTests()
+		skipped += pkgSummary.NumSkippedTests()
+	}
+	return passed + failed + skipped
+}
+
+type PackageSummary struct {
+	Package      string
+	RunIDs       []uuid.UUID
+	ErrorRunIDs  []uuid.UUID
+	PassedTests  map[string][]uuid.UUID
+	FailedTests  map[string][]uuid.UUID
+	SkippedTests map[string][]uuid.UUID
+}
+
+func (s *PackageSummary) NumPassedTests() int {
+	var total int
+	for _, tests := range s.PassedTests {
+		total += len(tests)
+	}
+	return total
+}
+
+func (s *PackageSummary) PercentPassedTests() float64 {
+	return float64(s.NumPassedTests()) / float64(s.NumTotalTests())
+}
+
+func (s *PackageSummary) NumFailedTests() int {
+	var total int
+	for _, tests := range s.FailedTests {
+		total += len(tests)
+	}
+	return total
+}
+
+func (s *PackageSummary) PercentFailedTests() float64 {
+	return float64(s.NumFailedTests()) / float64(s.NumTotalTests())
+}
+
+func (s *PackageSummary) NumSkippedTests() int {
+	var total int
+	for _, tests := range s.SkippedTests {
+		total += len(tests)
+	}
+	return total
+}
+
+func (s *PackageSummary) PercentSkippedTests() float64 {
+	return float64(s.NumSkippedTests()) / float64(s.NumTotalTests())
+}
+
+func (s *PackageSummary) NumTotalTests() int {
+	return s.NumPassedTests() + s.NumFailedTests() + s.NumSkippedTests()
+}
