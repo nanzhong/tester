@@ -383,6 +383,9 @@ func (p *PG) ListRunsForPackage(ctx context.Context, pkg string, limit int) ([]*
 }
 
 func (p *PG) ListRunSummariesForRange(ctx context.Context, begin, end time.Time, window time.Duration) ([]*tester.RunSummary, error) {
+	begin = begin.UTC()
+	end = end.UTC()
+
 	buckets := int(math.Ceil(float64(end.Sub(begin)) / float64(window)))
 	summaries := make([]*tester.RunSummary, buckets)
 	for i := 0; i < buckets; i++ {
@@ -427,6 +430,7 @@ func (p *PG) ListRunSummariesForRange(ctx context.Context, begin, end time.Time,
 			if err != nil {
 				return err
 			}
+			runStartedAt = runStartedAt.UTC()
 
 			bucketIndex := int(runStartedAt.Sub(begin) / window)
 			summary := summaries[bucketIndex]
