@@ -289,13 +289,16 @@ func (h *UIHandler) getRunSummary(w http.ResponseWriter, r *http.Request) {
 		h.RenderError(w, r, err, http.StatusBadRequest)
 		return
 	}
+	beginTime := time.Unix(int64(begin), 0)
+
 	window, err := strconv.ParseFloat(r.URL.Query().Get("window"), 64)
 	if err != nil {
 		h.RenderError(w, r, err, http.StatusBadRequest)
 		return
 	}
+	windowDuration := time.Duration(window) * time.Second
 
-	summaries, err := h.db.ListRunSummariesForRange(ctx, time.Unix(int64(begin), 0), time.Unix(int64(begin)+int64(window), 0), time.Duration(window)*time.Second)
+	summaries, err := h.db.ListRunSummariesForRange(ctx, beginTime, beginTime.Add(windowDuration), windowDuration)
 	if err != nil {
 		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return

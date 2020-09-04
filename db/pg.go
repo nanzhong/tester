@@ -198,15 +198,22 @@ func (p *PG) ResetRun(ctx context.Context, id uuid.UUID) error {
 			"finished_at": sql.NullTime{},
 			"error":       sql.NullString{},
 		}).
-		Where("id = ?", id)
+		Where("id = ?", id).
+		Where("finished_at IS NOT NULL")
 
 	sql, args, err := q.ToSql()
 	if err != nil {
 		return err
 	}
 
-	_, err = p.pool.Exec(ctx, sql, args...)
-	return err
+	res, err := p.pool.Exec(ctx, sql, args...)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (p *PG) DeleteRun(ctx context.Context, id uuid.UUID) error {
@@ -383,6 +390,9 @@ func (p *PG) ListRunsForPackage(ctx context.Context, pkg string, limit int) ([]*
 }
 
 func (p *PG) ListRunSummariesForRange(ctx context.Context, begin, end time.Time, window time.Duration) ([]*tester.RunSummary, error) {
+	begin = begin.UTC()
+	end = end.UTC()
+
 	buckets := int(math.Ceil(float64(end.Sub(begin)) / float64(window)))
 	summaries := make([]*tester.RunSummary, buckets)
 	for i := 0; i < buckets; i++ {
@@ -399,8 +409,8 @@ func (p *PG) ListRunSummariesForRange(ctx context.Context, begin, end time.Time,
 			Join("runs ON tests.run_id = runs.id").
 			Where("runs.started_at IS NOT NULL").
 			Where("runs.started_at >= ?", begin).
+			Where("runs.started_at <= ?", end).
 			Where("runs.finished_at IS NOT NULL").
-			Where("runs.finished_at <= ?", end).
 			OrderBy("runs.started_at ASC")
 
 		query, args, err := q.ToSql()
@@ -427,6 +437,7 @@ func (p *PG) ListRunSummariesForRange(ctx context.Context, begin, end time.Time,
 			if err != nil {
 				return err
 			}
+			runStartedAt = runStartedAt.UTC()
 
 			bucketIndex := int(runStartedAt.Sub(begin) / window)
 			summary := summaries[bucketIndex]
