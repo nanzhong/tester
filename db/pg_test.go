@@ -227,7 +227,7 @@ func TestPG_ListRunSummariesForRange(t *testing.T) {
 
 	t.Run("creates empty buckets", func(t *testing.T) {
 		withPG(t, func(tb testing.TB, pg *PG) {
-			now := time.Now()
+			now := time.Now().UTC()
 			summaries, err := pg.ListRunSummariesForRange(ctx, now, now.Add(3*time.Minute+15*time.Second), time.Minute)
 			require.NoError(t, err)
 			assert.Len(t, summaries, 4)
@@ -240,8 +240,8 @@ func TestPG_ListRunSummariesForRange(t *testing.T) {
 
 	t.Run("places runs in correct buckets", func(t *testing.T) {
 		withPG(t, func(tb testing.TB, pg *PG) {
-			begin := time.Now()
-			end := begin.Add(3 * time.Minute)
+			begin := time.Now().UTC()
+			end := begin.Add(3 * time.Minute).UTC()
 			window := time.Minute
 
 			pkg1run1 := &tester.Run{
