@@ -240,6 +240,9 @@ func (s *Scheduler) resetStaleRuns(ctx context.Context) error {
 		if time.Now().Sub(run.StartedAt) > s.runTimeout {
 			err = s.db.ResetRun(ctx, run.ID)
 			if err != nil {
+				if err == db.ErrNotFound {
+					continue
+				}
 				return err
 			}
 			log.Printf("reset run %s", run.Package)

@@ -198,15 +198,22 @@ func (p *PG) ResetRun(ctx context.Context, id uuid.UUID) error {
 			"finished_at": sql.NullTime{},
 			"error":       sql.NullString{},
 		}).
-		Where("id = ?", id)
+		Where("id = ?", id).
+		Where("finished_at IS NOT NULL")
 
 	sql, args, err := q.ToSql()
 	if err != nil {
 		return err
 	}
 
-	_, err = p.pool.Exec(ctx, sql, args...)
-	return err
+	res, err := p.pool.Exec(ctx, sql, args...)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (p *PG) DeleteRun(ctx context.Context, id uuid.UUID) error {
