@@ -399,8 +399,8 @@ func (p *PG) ListRunSummariesForRange(ctx context.Context, begin, end time.Time,
 			Join("runs ON tests.run_id = runs.id").
 			Where("runs.started_at IS NOT NULL").
 			Where("runs.started_at >= ?", begin).
+			Where("runs.started_at <= ?", end).
 			Where("runs.finished_at IS NOT NULL").
-			Where("runs.finished_at <= ?", end).
 			OrderBy("runs.started_at ASC")
 
 		query, args, err := q.ToSql()
