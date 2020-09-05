@@ -117,7 +117,7 @@ func (h *UIHandler) dashboard(w http.ResponseWriter, r *http.Request) {
 	h.mu.Unlock()
 
 	uniquePackages := make(map[string]struct{})
-	for _, s := range daySummaries {
+	for _, s := range monthSummaries {
 		for pkg := range s.PackageSummary {
 			if _, ok := uniquePackages[pkg]; ok {
 				continue
