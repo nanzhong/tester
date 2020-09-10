@@ -202,14 +202,18 @@ func TestPG_Run(t *testing.T) {
 		})
 
 		t.Run("reset", func(t *testing.T) {
-			err := pg.ResetRun(ctx, run2.ID)
-			require.NoError(t, err)
-			run2, err = pg.GetRun(ctx, run2.ID)
+			err := pg.ResetRun(ctx, run3.ID)
 			require.NoError(t, err)
 
 			runs, err := pg.ListPendingRuns(ctx)
 			require.NoError(t, err)
-			assert.ElementsMatch(t, []*tester.Run{run2, run3}, runs)
+			assert.Subset(t, runs, []*tester.Run{run3})
+
+			t.Run("finshed run", func(t *testing.T) {
+				err := pg.ResetRun(ctx, run1.ID)
+				require.Error(t, err)
+				assert.Equal(t, ErrNotFound, err)
+			})
 		})
 
 		t.Run("delete", func(t *testing.T) {
@@ -217,7 +221,7 @@ func TestPG_Run(t *testing.T) {
 			require.NoError(t, err)
 			runs, err := pg.ListPendingRuns(ctx)
 			require.NoError(t, err)
-			assert.ElementsMatch(t, []*tester.Run{run2}, runs)
+			assert.NotSubset(t, runs, []*tester.Run{run3})
 		})
 	})
 }
