@@ -199,7 +199,7 @@ func (p *PG) ResetRun(ctx context.Context, id uuid.UUID) error {
 			"error":       sql.NullString{},
 		}).
 		Where("id = ?", id).
-		Where("finished_at IS NOT NULL")
+		Where("finished_at IS NULL")
 
 	sql, args, err := q.ToSql()
 	if err != nil {
