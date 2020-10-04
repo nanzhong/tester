@@ -481,30 +481,24 @@ func (p *PG) ListRunSummariesForRange(ctx context.Context, begin, end time.Time,
 				continue
 			}
 
+			var runIDs []uuid.UUID
 			uniqueRunIDs := make(map[uuid.UUID]struct{})
 			for _, id := range packageSummary.RunIDs {
 				if _, exists := uniqueRunIDs[id]; exists {
 					continue
 				}
 				uniqueRunIDs[id] = struct{}{}
-			}
-
-			var runIDs []uuid.UUID
-			for id := range uniqueRunIDs {
 				runIDs = append(runIDs, id)
 			}
 			packageSummary.RunIDs = runIDs
 
+			var errorRunIDs []uuid.UUID
 			uniqueErrorRunIDs := make(map[uuid.UUID]struct{})
 			for _, id := range packageSummary.ErrorRunIDs {
 				if _, exists := uniqueErrorRunIDs[id]; exists {
 					continue
 				}
 				uniqueErrorRunIDs[id] = struct{}{}
-			}
-
-			var errorRunIDs []uuid.UUID
-			for id := range uniqueErrorRunIDs {
 				errorRunIDs = append(errorRunIDs, id)
 			}
 			packageSummary.ErrorRunIDs = errorRunIDs
