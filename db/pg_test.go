@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/nanzhong/tester"
@@ -106,17 +107,29 @@ func TestPG_Test(t *testing.T) {
 		t.Run("get", func(t *testing.T) {
 			getTest, err := pg.GetTest(ctx, test1.ID)
 			require.NoError(t, err)
-			assert.Equal(t, test1, getTest)
+			assert.True(
+				t,
+				cmp.Equal(test1, getTest),
+				"expected to be equal", cmp.Diff(test1, getTest),
+			)
 		})
 
 		t.Run("list", func(t *testing.T) {
 			listAllTests, err := pg.ListTests(ctx, 0)
 			require.NoError(t, err)
-			assert.Equal(t, []*tester.Test{test1, test2}, listAllTests)
+			assert.True(
+				t,
+				cmp.Equal([]*tester.Test{test1, test2}, listAllTests),
+				"expected to be equal", cmp.Diff([]*tester.Test{test1, test2}, listAllTests),
+			)
 
 			listPkgTests, err := pg.ListTestsForPackage(ctx, "pkg-2", 0)
 			require.NoError(t, err)
-			assert.Equal(t, []*tester.Test{test2}, listPkgTests)
+			assert.True(
+				t,
+				cmp.Equal([]*tester.Test{test2}, listPkgTests),
+				"expected to be equal", cmp.Diff([]*tester.Test{test2}, listPkgTests),
+			)
 		})
 	})
 }

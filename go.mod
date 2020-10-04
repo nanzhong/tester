@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/Masterminds/squirrel v1.4.0
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
-	github.com/google/go-cmp v0.4.0 // indirect
+	github.com/google/go-cmp v0.5.2
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/sessions v1.2.0
