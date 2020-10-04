@@ -25,7 +25,9 @@ func TestMain(m *testing.M) {
 	if pgDSN != "" {
 		conn, err := pgx.Connect(context.Background(), pgDSN)
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
+			status = 1
+			return
 		}
 		defer conn.Close(context.Background())
 
@@ -34,11 +36,20 @@ func TestMain(m *testing.M) {
 
 		_, err = conn.Exec(context.Background(), fmt.Sprintf("CREATE DATABASE %s WITH OWNER = %s", testDB, cfg.User))
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
+			status = 1
+			return
 		}
-		defer conn.Exec(context.Background(), fmt.Sprintf("DROP DATABASE %s", testDB))
+		defer func() {
+			_, err := conn.Exec(context.Background(), fmt.Sprintf("DROP DATABASE %s", testDB))
+			if err != nil {
+				fmt.Println(err)
+				status = 1
+				return
+			}
+		}()
 
-		pgDSN = fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", cfg.User, cfg.Password, cfg.Host, cfg.Port, testDB)
+		pgDSN = fmt.Sprintf("postgres://%s:%s@%s:%d/%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, testDB)
 		os.Setenv("PG_DSN", pgDSN)
 	}
 
