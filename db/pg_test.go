@@ -27,6 +27,7 @@ func withPG(tb testing.TB, fn func(tb testing.TB, pg *PG)) {
 	err = pg.Init(context.Background())
 	require.NoError(tb, err)
 
+	tb.Log("test")
 	fn(tb, pg)
 }
 
