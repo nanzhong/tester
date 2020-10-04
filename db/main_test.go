@@ -34,14 +34,14 @@ func TestMain(m *testing.M) {
 		cfg := conn.Config()
 		testDB := fmt.Sprintf("tester_%d", time.Now().Unix())
 
-		_, err = conn.Exec(context.Background(), fmt.Sprintf("CREATE DATABASE %s WITH OWNER = %s", testDB, cfg.User))
+		_, err = conn.Exec(context.Background(), fmt.Sprintf("CREATE DATABASE %s WITH OWNER = %s", pgx.Identifier{testDB}.Sanitize(), pgx.Identifier{cfg.User}.Sanitize()))
 		if err != nil {
 			fmt.Println(err)
 			status = 1
 			return
 		}
 		defer func() {
-			_, err := conn.Exec(context.Background(), fmt.Sprintf("DROP DATABASE %s", testDB))
+			_, err := conn.Exec(context.Background(), fmt.Sprintf("DROP DATABASE %s", pgx.Identifier{testDB}.Sanitize()))
 			if err != nil {
 				fmt.Println(err)
 				status = 1
