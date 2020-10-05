@@ -1,0 +1,125 @@
+* tester
+Convenient tooling for scheduling, running, and reporting on go tests.
+
+[[https://github.com/nanzhong/tester][nanzhong/tester]] is not a testing framework, and it does not impose any patterns on how tests are written. It is a tool that makes it easy to schedule test runs and to collect their results. A common use case for it is to manage a suite of end to end tests, to visualize the test results, and to alert on failures.
+
+** Demo
+[[screenshot.jpg]]
+A live example of the latest version of this tooling can be found at https://tester.nanzho.ng.
+
+** How it works
+[[https://github.com/nanzhong/tester][nanzhong/tester]] is made up of three parts: the server, the runner, and the configuration.
+
+*** Server
+The server provides the bulk of the functionality. It is responsible for:
+- scheduling test runs
+- serving the HTTP user interface 
+- providing the HTTP based API that the runners use
+- alerting on test failures
+
+All the test run data is stored in a postgresql database.
+
+*** Runner
+The runner is responsible for running the tests themselves. It coordinates what tests to run by interacting with the API provided by the server.
+
+*** Configuration
+A common configuration format is shared between the server and runners. 
+
+The server uses the configuration to:
+- determine what tests to schedule
+- determine how it alerts
+- configuring the optional slack integration
+  - generating the help information for the custom slack command
+
+The runners use the configuration to:
+- let the server know what tests they are capable of running and requesting runs
+
+Format:
+#+BEGIN_SRC js
+{
+  "packages": [
+    {
+      // name of test package
+      "name": "pkg",
+      // path to the test binary for the package
+      "path": "pkg.test",
+      // test binary options that are supported      
+      "options": [
+        {
+          "name": "test.timeout",
+          "description": "Maximum time tests can run for",
+          "default": "1m"
+        }
+      ]
+    },
+    // ...
+  ],
+  "scheduler": {
+    // how long a test is allowed to run before timing out
+    "run_timeout": "1m"
+  },
+  "slack": {
+    // the default channels all failures should be alerted on
+    "default_channels": [ "alerts" ],
+    "custom_channels": {
+      // additional custom channels that package failures to should be alerted on
+      "pkg": [ "pkg-alerts" ]
+    }
+  }
+}
+#+END_SRC
+
+An full example of the configuration format can be found in [[config.json][config.json]] that is used for the live demo.
+
+** Usage
+[[https://github.com/nanzhong/tester][nanzhong/tester]] builds into a single ~tester~ binary that has subcommands for running the server (~tester serve~) and runner (~tester run~).
+
+#+BEGIN_SRC sh
+~ go get github.com/nanzhong/tester/cmd/tester
+~ tester --help
+#+END_SRC
+
+Each commit is automatically built into a container image that contains the `tester` binary, and it is published to docker hub. You can find the set of images at [[https://hub.docker.com/repository/docker/nanzhong/tester][https://hub.docker.com/repository/docker/nanzhong/tester]].
+
+*** Server
+The server can be started with
+
+#+BEGIN_SRC sh
+~ tester serve \
+  --addr 127.0.0.1:8080                    `# address the listen on` \
+  --api-key secret-key                     `# symmetric key for API auth ` \
+  --config ./path/to/config                `# path to configuration file` \
+  --pg-dsn postgresql://user:pass@host/db  `# postgresql dsn for storing results`
+#+END_SRC
+
+**** Slack integration
+There are two slack integrations that are supported. The first is alerting in slack channels on failed test runs, the second is setting up a custom slack command that can be used to trigger test runs.
+
+Both of these require creating and setting up a slack application and the configuring the following server flags:
+#+BEGIN_SRC
+--slack-access-token string     Slack app access token
+--slack-signing-secret string   Slack signing secret
+#+END_SRC
+
+**** Okta authentication
+If the reporting UI requires authentication, okta oauth is supported.
+
+These additional server flags need to be configured:
+#+BEGIN_SRC
+--okta-client-id string         Okta client ID
+--okta-client-secret string     Okta client secret
+--okta-issuer string            Okta issuer
+--okta-redirect-uri string      Okta redirect URI
+--okta-session-key string       Okta session key
+#+END_SRC
+
+*** Runner
+A runner can be started with
+
+#+BEGIN_SRC sh
+~ tester run \
+  --api-key secret-key                     `# symmetric key for API auth ` \
+  --config ./path/to/config                `# path to configuration file` \
+#+END_SRC
+
+/Note/ that multiple runner can be used to increase throughput. Each runner can also be configured with different sets of packages.
