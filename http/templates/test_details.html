@@ -10,10 +10,6 @@
     {{template "test_card" .Test}}
   </div>
   <div class="col-lg-8">
-    {{if .Test.Logs}}
-    <pre><code>{{.Test.Logs | formatLogs}}</code></pre>
-    {{else}}
-    <p>No logs received yet...</p>
-    {{end}}
+    {{ template "test_logs" .Test }}
   </div>
 </div>
