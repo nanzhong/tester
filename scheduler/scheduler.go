@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,7 +81,6 @@ func (s *Scheduler) Schedule(ctx context.Context, packageName string, args ...st
 	if pkg == nil {
 		return nil, fmt.Errorf("unknown package: %s", packageName)
 	}
-	runPkg := *pkg
 
 	fs := flag.NewFlagSet(packageName, flag.ContinueOnError)
 	runPkgOptions := map[string]*string{}
@@ -92,18 +92,18 @@ func (s *Scheduler) Schedule(ctx context.Context, packageName string, args ...st
 		return nil, fmt.Errorf("parsing run options: %w", err)
 	}
 
-	runPkg.Options = nil
-	for _, option := range pkg.Options {
-		if value, set := runPkgOptions[option.Name]; set && value != nil && *value != "" {
-			runOption := option
-			runOption.Value = *value
-			runPkg.Options = append(runPkg.Options, runOption)
+	var runArgs []string
+	for _, opt := range pkg.Options {
+		if value, set := runPkgOptions[opt.Name]; set && value != nil && *value != "" {
+			runArgs = append(runArgs, fmt.Sprintf("-%s=%s", opt.Name, *value))
 		}
+
 	}
 
 	run := &tester.Run{
 		ID:         uuid.New(),
-		Package:    runPkg.Name,
+		Package:    pkg.Name,
+		Args:       runArgs,
 		EnqueuedAt: time.Now(),
 	}
 	err = s.db.EnqueueRun(ctx, run)
@@ -111,7 +111,7 @@ func (s *Scheduler) Schedule(ctx context.Context, packageName string, args ...st
 		return nil, fmt.Errorf("scheduling package: %w", err)
 	}
 
-	log.Printf("scheduled run %s", runPkg.Name)
+	log.Printf("scheduled run %s with args: %q", pkg.Name, strings.Join(runArgs, ", "))
 	return run, nil
 }
 
