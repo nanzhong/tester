@@ -51,11 +51,7 @@
       {{template "test_card" .}}
     </div>
     <div class="col-lg-8">
-      {{if .Logs}}
-      <pre><code>{{.Logs | formatLogs}}</code></pre>
-      {{else}}
-      <p>No logs received yet...</p>
-      {{end}}
+      {{ template "test_logs" . }}
     </div>
   </div>
   {{end}}

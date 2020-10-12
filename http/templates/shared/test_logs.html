@@ -1,0 +1,11 @@
+{{ define "test_logs" }}
+  {{ if .Logs }}
+    <pre><code>
+      {{- range .Logs -}}
+        <span class="text-muted">{{.Time | formatLogTime}}</span> <span>{{ .Output | formatLogOutput }}</span>
+      {{- end -}}
+    </code></pre>
+  {{ else }}
+    <p>No logs received yet...</p>
+  {{ end }}
+{{ end }}

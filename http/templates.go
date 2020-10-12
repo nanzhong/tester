@@ -151,15 +151,11 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 		"formatPercent": func(f float64) float64 {
 			return f * 100
 		},
-		"formatLogs": func(logData []tester.TBLog) template.HTML {
-			var b strings.Builder
-			for _, l := range logData {
-				b.WriteString(`<span class="text-muted">`)
-				b.WriteString(l.Time.Format("15:04:05"))
-				b.WriteString("</span> ")
-				b.Write(l.Output)
-			}
-			return template.HTML(b.String())
+		"formatLogTime": func(t time.Time) string {
+			return t.Format("15:04:05")
+		},
+		"formatLogOutput": func(o []byte) string {
+			return string(o)
 		},
 		"testStateMessage": func(state tester.TBState) string {
 			return string(state)
