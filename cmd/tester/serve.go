@@ -179,7 +179,7 @@ var serveCmd = &cobra.Command{
 		})
 		eg.Go(func() error {
 			log.Print("starting scheduler")
-			// scheduler.Run()
+			scheduler.Run()
 			return nil
 		})
 		err = eg.Wait()
