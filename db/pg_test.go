@@ -130,6 +130,14 @@ func TestPG_Test(t *testing.T) {
 				cmp.Equal([]*tester.Test{test2}, listPkgTests),
 				"expected to be equal", cmp.Diff([]*tester.Test{test2}, listPkgTests),
 			)
+
+			listPkgTestsInRange, err := pg.ListTestsForPackageInRange(ctx, "pkg-2", testTime, testTime)
+			require.NoError(t, err)
+			assert.True(
+				t,
+				cmp.Equal([]*tester.Test{test2}, listPkgTestsInRange),
+				"expected to be equal", cmp.Diff([]*tester.Test{test2}, listPkgTestsInRange),
+			)
 		})
 	})
 }
@@ -240,13 +248,13 @@ func TestPG_Run(t *testing.T) {
 	})
 }
 
-func TestPG_ListRunSummariesForRange(t *testing.T) {
+func TestPG_ListRunSummariesInRange(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates empty buckets", func(t *testing.T) {
 		withPG(t, func(tb testing.TB, pg *PG) {
 			now := time.Now().UTC()
-			summaries, err := pg.ListRunSummariesForRange(ctx, now, now.Add(3*time.Minute+15*time.Second), time.Minute)
+			summaries, err := pg.ListRunSummariesInRange(ctx, now, now.Add(3*time.Minute+15*time.Second), time.Minute)
 			require.NoError(t, err)
 			assert.Len(t, summaries, 4)
 			for i, summary := range summaries {
@@ -413,7 +421,7 @@ func TestPG_ListRunSummariesForRange(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			summaries, err := pg.ListRunSummariesForRange(ctx, begin, end, window)
+			summaries, err := pg.ListRunSummariesInRange(ctx, begin, end, window)
 			require.NoError(t, err)
 			assert.Len(t, summaries, 3)
 			assert.Equal(t, &tester.RunSummary{

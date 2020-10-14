@@ -1,0 +1,26 @@
+{{ define "package_run_summary_tooltip" }}
+<div>
+  <div class='row'>
+    <div class='col'><strong>Runs</strong></div>
+  </div>
+  <div class='row'>
+    <div class='col'>Total: {{ len .RunIDs }} {{ if len .ErrorRunIDs }}<small>({{ len .ErrorRunIDs }} erred)</small>{{ end }}</div>
+  </div>
+  <hr>
+  <div class='row'>
+    <div class='col'><strong>Tests</strong></div>
+  </div>
+  <div class='row'>
+    <div class='col-5'>Passed</div>
+    <div class='col-7'>{{ .NumPassedTests }} <small>({{ .PercentPassedTests | formatPercent | printf "%0.1f" }}%)</small></div>
+  </div>
+  <div class='row'>
+    <div class='col-5'>Skipped</div>
+    <div class='col-7'>{{ .NumSkippedTests }} <small>({{ .PercentSkippedTests | formatPercent | printf "%0.1f" }}%)</small></div>
+  </div>
+  <div class='row'>
+    <div class='col-5'>Failed</div>
+    <div class='col-7'>{{ .NumFailedTests }} <small>({{ .PercentFailedTests | formatPercent | printf "%0.1f" }}%)</small></div>
+  </div>
+</div>
+{{ end }}

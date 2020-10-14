@@ -52,151 +52,200 @@ func NewUIHandler(db db.DB, packages []tester.Package) *UIHandler {
 	return handler
 }
 
-func (h *UIHandler) RefreshSummaries(ctx context.Context) error {
+func (h *UIHandler) LoadSummaries(ctx context.Context) (packages []string, month, day, hour []*tester.RunSummary, err error) {
+	// Check to see if we need to refresh stale summary data.
+	h.mu.Lock()
+	diff := time.Now().Sub(h.summariesRefreshAt)
+	h.mu.Unlock()
+	if diff < 5*time.Minute {
+		return uniquePackages(h.monthSummaries), h.monthSummaries, h.daySummaries, h.hourSummaries, nil
+	}
+
 	now := time.Now().Truncate(5 * time.Minute)
 
 	lastHour := now.Add(-time.Hour)
 	lastDay := now.Add(-24 * time.Hour)
 
-	var (
-		hourSummaries  []*tester.RunSummary
-		daySummaries   []*tester.RunSummary
-		monthSummaries []*tester.RunSummary
-	)
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		var err error
-		hourSummaries, err = h.db.ListRunSummariesForRange(ctx, lastHour, now, 5*time.Minute)
+		hour, err = h.db.ListRunSummariesInRange(ctx, lastHour, now, 5*time.Minute)
 		return err
 	})
 	eg.Go(func() error {
 		var err error
-		daySummaries, err = h.db.ListRunSummariesForRange(ctx, lastDay, lastHour.Add(-time.Hour), time.Hour)
+		day, err = h.db.ListRunSummariesInRange(ctx, lastDay, lastHour, time.Hour)
 		return err
 	})
 	eg.Go(func() error {
 		var err error
-		monthSummaries, err = h.db.ListRunSummariesForRange(ctx, now.Add(-30*24*time.Hour), now, 12*time.Hour)
+		month, err = h.db.ListRunSummariesInRange(ctx, now.Add(-30*24*time.Hour), lastDay, 12*time.Hour)
 		return err
 	})
 	if err := eg.Wait(); err != nil {
-		return err
+		return nil, nil, nil, nil, err
 	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.hourSummaries = hourSummaries
-	h.daySummaries = daySummaries
-	h.monthSummaries = monthSummaries
+	h.hourSummaries = hour
+	h.daySummaries = day
+	h.monthSummaries = month
 	h.summariesRefreshAt = now
 
-	return nil
+	return uniquePackages(month), month, day, hour, nil
 }
 
 func (h *UIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Handler.ServeHTTP(w, r)
 }
 
+type monthlyRunSummary struct {
+	HourSummaries  []*tester.RunSummary
+	DaySummaries   []*tester.RunSummary
+	MonthSummaries []*tester.RunSummary
+
+	Height     int
+	HeightDiff int
+}
+
+type monthlyPackageRunSummary struct {
+	Name           string
+	HourSummaries  []*tester.RunSummary
+	DaySummaries   []*tester.RunSummary
+	MonthSummaries []*tester.RunSummary
+
+	Height     int
+	HeightDiff int
+}
+
+type dailyPackageRunSummary struct {
+	Name          string
+	HourSummaries []*tester.RunSummary
+	DaySummaries  []*tester.RunSummary
+
+	Height     int
+	HeightDiff int
+}
+
 func (h *UIHandler) dashboard(w http.ResponseWriter, r *http.Request) {
-	// Check to see if we need to refresh stale summary data.
-	h.mu.Lock()
-	diff := time.Now().Sub(h.summariesRefreshAt)
-	h.mu.Unlock()
-	if diff > 5*time.Minute {
-		if err := h.RefreshSummaries(r.Context()); err != nil {
-			h.RenderError(w, r, err, http.StatusInternalServerError)
-			return
-		}
+	packages, monthSummaries, daySummaries, hourSummaries, err := h.LoadSummaries(r.Context())
+	if err != nil {
+		h.RenderError(w, r, err, http.StatusInternalServerError)
+		return
 	}
 
-	h.mu.Lock()
-	hourSummaries := h.hourSummaries
-	daySummaries := h.daySummaries
-	monthSummaries := h.monthSummaries
-	h.mu.Unlock()
+	dailyPackageRunSummaries := make([]*dailyPackageRunSummary, len(packages))
 
-	uniquePackages := make(map[string]struct{})
-	for _, s := range monthSummaries {
-		for pkg := range s.PackageSummary {
-			if _, ok := uniquePackages[pkg]; ok {
-				continue
-			}
-			uniquePackages[pkg] = struct{}{}
+	for i, pkg := range packages {
+		dailyPackageRunSummaries[i] = &dailyPackageRunSummary{
+			Name:          pkg,
+			HourSummaries: hourSummaries,
+			DaySummaries:  daySummaries,
+
+			Height:     60,
+			HeightDiff: 10,
 		}
 	}
-	var allPackages []string
-	for pkg := range uniquePackages {
-		allPackages = append(allPackages, pkg)
-	}
-	sort.Slice(allPackages, func(i, j int) bool {
-		return allPackages[i] < allPackages[j]
-	})
 
 	value := &struct {
-		Packages       []string
-		HourSummaries  []*tester.RunSummary
-		DaySummaries   []*tester.RunSummary
-		MonthSummaries []*tester.RunSummary
+		OverallMonthlyRunSummary *monthlyRunSummary
+		DailyPackageRunSummaries []*dailyPackageRunSummary
 	}{
-		Packages:       allPackages,
-		HourSummaries:  hourSummaries,
-		DaySummaries:   daySummaries,
-		MonthSummaries: monthSummaries,
+		OverallMonthlyRunSummary: &monthlyRunSummary{
+			HourSummaries:  hourSummaries,
+			DaySummaries:   daySummaries,
+			MonthSummaries: monthSummaries,
+
+			Height:     100,
+			HeightDiff: 20,
+		},
+		DailyPackageRunSummaries: dailyPackageRunSummaries,
 	}
 
 	h.Render(w, r, "dashboard", value)
 }
 
 func (h *UIHandler) listPackages(w http.ResponseWriter, r *http.Request) {
-	runsByPackage := make(map[string][]*tester.Run)
-	for _, p := range h.packages {
-		runs, err := h.db.ListRunsForPackage(r.Context(), p.Name, 5)
-		if err != nil {
-			h.RenderError(w, r, err, http.StatusInternalServerError)
-			return
-		}
-		runsByPackage[p.Name] = runs
-	}
-
-	value := &struct {
-		Packages []struct {
-			Name string
-			Runs []*tester.Run
-		}
-	}{}
-	for pkg, runs := range runsByPackage {
-		value.Packages = append(value.Packages, struct {
-			Name string
-			Runs []*tester.Run
-		}{
-			Name: pkg,
-			Runs: runs,
-		})
-	}
-
-	sort.Slice(value.Packages, func(i, j int) bool {
-		return value.Packages[i].Name < value.Packages[j].Name
-	})
-
-	h.Render(w, r, "packages", value)
-}
-
-func (h *UIHandler) getPackage(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	pkg := vars["package"]
-	runs, err := h.db.ListRunsForPackage(r.Context(), pkg, 50)
+	packages, monthSummaries, daySummaries, hourSummaries, err := h.LoadSummaries(r.Context())
 	if err != nil {
 		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	value := &struct {
-		Name string
-		Runs []*tester.Run
-	}{
+	monthlyPackageRunSummaries := make([]*monthlyPackageRunSummary, len(packages))
+
+	for i, pkg := range packages {
+		monthlyPackageRunSummaries[i] = &monthlyPackageRunSummary{
+			Name:           pkg,
+			HourSummaries:  hourSummaries,
+			DaySummaries:   daySummaries,
+			MonthSummaries: monthSummaries,
+
+			Height:     60,
+			HeightDiff: 10,
+		}
+	}
+
+	h.Render(w, r, "packages", monthlyPackageRunSummaries)
+}
+
+func (h *UIHandler) getPackage(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	pkg := vars["package"]
+
+	latestRuns, err := h.db.ListRunsForPackage(r.Context(), pkg, 5)
+	if err != nil {
+		h.RenderError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	now := time.Now()
+	lastWeek := now.Add(-7 * 24 * time.Hour)
+
+	monthlyTests, err := h.db.ListTestsForPackageInRange(r.Context(), pkg, lastWeek, now)
+	if err != nil {
+		h.RenderError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	monthlyTestsByName := make(map[string][]*tester.Test)
+	for _, test := range monthlyTests {
+		monthlyTestsByName[test.Result.Name] = append(monthlyTestsByName[test.Result.Name], test)
+	}
+
+	packages, monthSummaries, daySummaries, hourSummaries, err := h.LoadSummaries(r.Context())
+	if err != nil {
+		h.RenderError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	monthlyRunSummary := &monthlyPackageRunSummary{
 		Name: pkg,
-		Runs: runs,
+
+		Height:     100,
+		HeightDiff: 20,
+	}
+
+	for _, name := range packages {
+		if name == pkg {
+			monthlyRunSummary.MonthSummaries = monthSummaries
+			monthlyRunSummary.DaySummaries = daySummaries
+			monthlyRunSummary.HourSummaries = hourSummaries
+			break
+		}
+	}
+
+	value := &struct {
+		Name                     string
+		MonthlyPackageRunSummary *monthlyPackageRunSummary
+		LatestRuns               []*tester.Run
+		TestsByName              map[string][]*tester.Test
+	}{
+		Name:                     pkg,
+		MonthlyPackageRunSummary: monthlyRunSummary,
+		LatestRuns:               latestRuns,
+		TestsByName:              monthlyTestsByName,
 	}
 
 	h.Render(w, r, "package_details", value)
@@ -298,7 +347,7 @@ func (h *UIHandler) getRunSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	windowDuration := time.Duration(window) * time.Second
 
-	summaries, err := h.db.ListRunSummariesForRange(ctx, beginTime, beginTime.Add(windowDuration), windowDuration)
+	summaries, err := h.db.ListRunSummariesInRange(ctx, beginTime, beginTime.Add(windowDuration), windowDuration)
 	if err != nil {
 		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return
@@ -345,4 +394,26 @@ func (h *UIHandler) RenderError(w http.ResponseWriter, r *http.Request, err erro
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	b.WriteTo(w)
+}
+
+func uniquePackages(summaries []*tester.RunSummary) []string {
+	unique := make(map[string]struct{})
+	for _, s := range summaries {
+		for pkg := range s.PackageSummary {
+			if _, ok := unique[pkg]; ok {
+				continue
+			}
+			unique[pkg] = struct{}{}
+		}
+	}
+
+	var packages []string
+	for pkg := range unique {
+		packages = append(packages, pkg)
+	}
+	sort.Slice(packages, func(i, j int) bool {
+		return packages[i] < packages[j]
+	})
+
+	return packages
 }

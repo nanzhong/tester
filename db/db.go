@@ -20,6 +20,7 @@ type DB interface {
 	GetTest(ctx context.Context, id uuid.UUID) (*tester.Test, error)
 	ListTests(ctx context.Context, limit int) ([]*tester.Test, error)
 	ListTestsForPackage(ctx context.Context, pkg string, limit int) ([]*tester.Test, error)
+	ListTestsForPackageInRange(ctx context.Context, pkg string, begin, end time.Time) ([]*tester.Test, error)
 
 	EnqueueRun(ctx context.Context, run *tester.Run) error
 	StartRun(ctx context.Context, id uuid.UUID) error
@@ -31,5 +32,5 @@ type DB interface {
 	ListPendingRuns(ctx context.Context) ([]*tester.Run, error)
 	ListFinishedRuns(ctx context.Context, limit int) ([]*tester.Run, error)
 	ListRunsForPackage(ctx context.Context, pkg string, limit int) ([]*tester.Run, error)
-	ListRunSummariesForRange(ctx context.Context, begin, end time.Time, window time.Duration) ([]*tester.RunSummary, error)
+	ListRunSummariesInRange(ctx context.Context, begin, end time.Time, window time.Duration) ([]*tester.RunSummary, error)
 }

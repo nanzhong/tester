@@ -129,6 +129,9 @@ func (s *UIHandler) templateFuncs() template.FuncMap {
 		"formatTime": func(t time.Time) string {
 			return t.Format("2006-01-02 15:04:05")
 		},
+		"formatTimeRFC3339": func(t time.Time) string {
+			return t.Format(time.RFC3339)
+		},
 		"formatRelativeTime": func(t time.Time) string {
 			d := time.Now().Sub(t)
 			var suffix string

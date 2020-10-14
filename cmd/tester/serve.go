@@ -166,7 +166,7 @@ var serveCmd = &cobra.Command{
 		})
 		eg.Go(func() error {
 			for {
-				if err := uiHandler.RefreshSummaries(ctx); err != nil {
+				if _, _, _, _, err := uiHandler.LoadSummaries(ctx); err != nil {
 					log.Printf("failed to refresh summaries %s", err)
 				}
 
@@ -179,7 +179,7 @@ var serveCmd = &cobra.Command{
 		})
 		eg.Go(func() error {
 			log.Print("starting scheduler")
-			scheduler.Run()
+			// scheduler.Run()
 			return nil
 		})
 		err = eg.Wait()

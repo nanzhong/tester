@@ -1,0 +1,56 @@
+{{ define "package_run_summary_day" }}
+<div class="border p-1">
+  <div class="d-flex">
+    {{ range $.DaySummaries }}
+    {{ $pkgSummary := index .PackageSummary $.Name }}
+    <a class="flex-grow-1" style="margin: 1px; min-width: 2px; min-height: {{ $.Height }}px; max-height: {{ $.Height }}px;"
+       href="/run_summary?package={{ $.Name }}&begin={{ .Time.Unix }}&window={{ .Duration.Seconds }}"
+       {{if $pkgSummary}}
+       data-toggle="popover"
+       data-trigger="hover"
+       data-placement="bottom"
+       data-html="true"
+       data-title="<small>{{ .Time | formatTime }} <small>({{ .Duration.String }})</small></small>"
+       data-content="{{ template "package_run_summary_tooltip" $pkgSummary }}"
+       {{end}}
+       >
+      {{if not $pkgSummary}}
+      <div class="bg-light" style="min-height: 100%;"></div>
+      {{else}}
+      <div style="min-height: calc(1 * {{ $.HeightDiff }}px);"></div>
+      <div style="height: calc({{ $.Height }}px - 1 * {{ $.HeightDiff }}px);">
+        {{ template "package_run_summary_bar" $pkgSummary }}
+      </div>
+      {{end}}
+    </a>
+    {{end}}
+
+    {{ range $.HourSummaries }}
+    {{ $pkgSummary := index .PackageSummary $.Name }}
+    <a class="flex-grow-1" style="margin: 1px; min-width: 2px; min-height: {{ $.Height }}px; max-height: {{ $.Height }}px;"
+       href="/run_summary?package={{ $.Name }}&begin={{ .Time.Unix }}&window={{ .Duration.Seconds }}"
+       {{if $pkgSummary}}
+       data-toggle="popover"
+       data-trigger="hover"
+       data-placement="bottom"
+       data-html="true"
+       data-title="<small>{{ .Time | formatTime }} <small>({{ .Duration.String }})</small></small>"
+       data-content="{{ template "package_run_summary_tooltip" $pkgSummary }}"
+       {{end}}
+       >
+      {{if not $pkgSummary}}
+      <div class="bg-light" style="min-height: 100%;"></div>
+      {{else}}
+      {{ template "package_run_summary_bar" $pkgSummary }}
+      {{end}}
+    </a>
+    {{end}}
+  </div>
+  <div class="d-flex justify-content-between">
+    <div style="width: calc(100% * 58 / (58 + 23 + 12));"><small class="text-muted">30d</small></div>
+    <div style="width: calc(100% * 23 / (58 + 23 + 12));"><small class="text-muted">24h</small></div>
+    <div class="flex-grow-1"><small class="text-muted">1h</small></div>
+    <div><small class="text-muted">now</small></div>
+  </div>
+</div>
+{{ end }}

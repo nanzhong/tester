@@ -1,19 +1,141 @@
 <div class="package-details">
   <div class="row">
     <div class="col">
-      <h2 class="h4"><a href="/packages/{{.Name}}">{{.Name}}</a></h2>
-      {{if .Runs}}
+      <h1>{{.Name}}</h1>
+      <h2>Overall Results <small class="text-muted">(last 30d)</small></h2>
+      {{ template "package_run_summary_month" .MonthlyPackageRunSummary }}
+
+      <hr>
+
+      <h2>Latest Runs <small class="text-muted">(last 5)</small></h2>
+      {{if .LatestRuns}}
       <div class="row row-cols-1 row-cols-md-4 row-cols-lg-5 g-3">
-        {{range .Runs}}
+        {{range .LatestRuns}}
         <div class="col">
           {{template "run_card" .}}
         </div>
         {{end}}
       </div>
       {{else}}
-      <h5>No runs yet</h5>
+      <h3>No runs yet</h3>
       <p>Kick off a test run and publish the results...</p>
       {{end}}
+
+      <hr>
+
+      <h2>Tests</h2>
+      {{ range $name, $tests := .TestsByName }}
+      <h3>{{ $name }}</h3>
+      <div class="row">
+        <div class="col" style="height: 300px;">
+          <canvas id="{{ $name }}-runs"></canvas>
+          <script>
+            var chart = new Chart("{{ $name }}-runs", {
+	      type: 'scatter',
+	      data: {
+		datasets: [
+                  {
+                    label: "passed",
+		    data: [
+                      {{ range $tests }}
+                      {{ if eq .Result.State "passed" }}
+                      {
+                        x: new Date("{{ .Result.StartedAt | formatTimeRFC3339 }}"),
+                        y: {{ .Result.Duration.Seconds }},
+                        id: {{ .ID }},
+                      },
+                      {{ end }}
+                      {{ end }}
+                    ],
+                    backgroundColor: '#198754',
+		  },
+                  {
+                    label: "failed",
+		    data: [
+                      {{ range $tests }}
+                      {{ if eq .Result.State "failed" }}
+                      {
+                        x: new Date("{{ .Result.StartedAt | formatTimeRFC3339 }}"),
+                        y: {{ .Result.Duration.Seconds }},
+                        id: {{ .ID }},
+                      },
+                      {{ end }}
+                      {{ end }}
+                    ],
+                    backgroundColor: '#dc3545',
+                  },
+                  {
+                    label: "skipped",
+		    data: [
+                      {{ range $tests }}
+                      {{ if eq .Result.State "skipped" }}
+                      {
+                        x: new Date("{{ .Result.StartedAt | formatTimeRFC3339 }}"),
+                        y: {{ .Result.Duration.Seconds }},
+                        id: {{ .ID }},
+                      },
+                      {{ end }}
+                      {{ end }}
+                    ],
+                    backgroundColor: '#ffc107',
+                  },
+                ],
+	      },
+	      options: {
+                legend: {
+                  display: false,
+                },
+                tooltips: {
+                  callbacks: {
+                    label: function(tooltipItem, data) {
+                      return data.datasets[tooltipItem.datasetIndex].data[tooltipItem.index].id;
+                    },
+                    label: function(tooltipItem, data) {
+                      var label = 'Duration (s): ';
+                      label += data.datasets[tooltipItem.datasetIndex].data[tooltipItem.index].y;
+                      return label;
+                    },
+                  },
+                },
+                onClick: function(e, el) {
+                  if (el.length === 0) {
+                    return
+                  }
+                  var testID = el[0]._chart.config.data.datasets[el[0]._datasetIndex].data[el[0]._index].id;
+                  location.href = "/tests/" + testID;
+                },
+		scales: {
+		  xAxes: [{
+		    type: 'time',
+                    time: {
+                      distribution: 'linear',
+                      unit: 'day',
+                      displayFormats: {
+                        day: "MMM D, YYYY"
+                      },
+		    },
+		    scaleLabel: {
+		      display: true,
+		      labelString: 'Time'
+		    }
+		  }],
+                  yAxes: [{
+                    scaleLabel: {
+                      display: true,
+                      labelString: 'Duration (s)',
+                    },
+                    ticks: {
+                      precision: 3,
+                    },
+                  }],
+		},
+                maintainAspectRatio: false,
+	      }
+	    });
+          </script>
+        </div>
+      </div>
+      {{ end }}
     </div>
   </div>
 </div>

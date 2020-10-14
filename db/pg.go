@@ -162,6 +162,14 @@ func (p *PG) ListTestsInDateRange(ctx context.Context, from, to time.Time) ([]*t
 	return p.listTests(ctx, p.pool, nil, 0)
 }
 
+func (p *PG) ListTestsForPackageInRange(ctx context.Context, pkg string, from, to time.Time) ([]*tester.Test, error) {
+	return p.listTests(ctx, p.pool, sq.And{
+		sq.Eq{"package": pkg},
+		sq.Expr("result->'started_at' >= ?", from),
+		sq.Expr("result->'started_at' <= ?", to),
+	}, 0)
+}
+
 func (p *PG) EnqueueRun(ctx context.Context, run *tester.Run) error {
 	r := (*pgRun)(run)
 	q := psq.Insert("runs").
@@ -389,7 +397,7 @@ func (p *PG) ListRunsForPackage(ctx context.Context, pkg string, limit int) ([]*
 	return runs, nil
 }
 
-func (p *PG) ListRunSummariesForRange(ctx context.Context, begin, end time.Time, window time.Duration) ([]*tester.RunSummary, error) {
+func (p *PG) ListRunSummariesInRange(ctx context.Context, begin, end time.Time, window time.Duration) ([]*tester.RunSummary, error) {
 	begin = begin.UTC()
 	end = end.UTC()
 
