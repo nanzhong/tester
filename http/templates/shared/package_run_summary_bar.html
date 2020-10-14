@@ -1,0 +1,5 @@
+{{ define "package_run_summary_bar" }}
+<div class="bg-danger bg-gradient" style="min-height: calc(100% * {{ .PercentFailedTests }});"></div>
+<div class="bg-warning bg-gradient" style="min-height: calc(100% * {{ .PercentSkippedTests }});"></div>
+<div class="bg-success bg-gradient" style="min-height: calc(100% * {{ .PercentPassedTests }});"></div>
+{{ end }}

@@ -1,0 +1,90 @@
+{{ define "run_summary_month_tooltip" }}
+<div>
+  <div class='row'>
+    <div class='col'><strong>Runs</strong></div>
+  </div>
+  <div class='row'>
+    <div class='col'>Total: {{ .NumRuns }} {{ if .NumErrorRuns }}<small>({{ .NumErrorRuns }} erred)</small>{{ end }}</div>
+  </div>
+  <hr>
+  <div class='row'>
+    <div class='col'><strong>Tests</strong></div>
+  </div>
+  <div class='row'>
+    <div class='col-5'>Passed</div>
+    <div class='col-7'>{{ .NumPassedTests }} <small>({{ .PercentPassedTests | formatPercent | printf "%0.1f" }}%)</small></div>
+  </div>
+  <div class='row'>
+    <div class='col-5'>Skipped</div>
+    <div class='col-7'>{{ .NumSkippedTests }} <small>({{ .PercentSkippedTests | formatPercent | printf "%0.1f" }}%)</small></div>
+  </div>
+  <div class='row'>
+    <div class='col-5'>Failed</div>
+    <div class='col-7'>{{ .NumFailedTests }} <small>({{ .PercentFailedTests | formatPercent | printf "%0.1f" }}%)</small></div>
+  </div>
+</div>
+{{ end }}
+{{ define "run_summary_month_bar" }}
+<div class="bg-danger bg-gradient" style="min-height: calc(100% * {{ .PercentFailedTests }});"></div>
+<div class="bg-warning bg-gradient" style="min-height: calc(100% * {{ .PercentSkippedTests }});"></div>
+<div class="bg-success bg-gradient" style="min-height: calc(100% * {{ .PercentPassedTests }});"></div>
+{{ end }}
+{{ define "run_summary_month" }}
+<div class="border p-1">
+  <div class="d-flex">
+    {{range .MonthSummaries}}
+    <a class="flex-grow-1" style="margin: 1px; min-width: 2px; min-height: {{ $.Height }}px; max-height: {{ $.Height }}px;"
+       href="/run_summary?begin={{ .Time.Unix }}&window={{ .Duration.Seconds }}"
+       data-toggle="popover"
+       data-trigger="hover"
+       data-placement="bottom"
+       data-html="true"
+       data-title="<small>{{.Time | formatTime}} <small>(12h)</small></small>"
+       data-content="{{ template "run_summary_month_tooltip" . }}"
+       >
+      <div style="min-height: calc(2 * {{ $.HeightDiff }}px);"></div>
+      <div style="height: calc({{ $.Height }}px - 2 * {{ $.HeightDiff }}px);">
+        {{ template "run_summary_month_bar" . }}
+      </div>
+    </a>
+    {{end}}
+
+    {{range .DaySummaries}}
+    <a class="flex-grow-1" style="margin: 1px; min-width: 2px; min-height: {{ $.Height }}px; max-height: {{ $.Height }}px;"
+       href="/run_summary?begin={{.Time.Unix}}&window={{.Duration.Seconds}}"
+       data-toggle="popover"
+       data-trigger="hover"
+       data-placement="bottom"
+       data-html="true"
+       data-title="<small>{{.Time | formatTime}} <small>(1h)</small></small>"
+       data-content="{{ template "run_summary_month_tooltip" . }}"
+       >
+      <div style="min-height: calc(1 * {{ $.HeightDiff }}px);"></div>
+      <div style="height: calc({{ $.Height }}px - 1 * {{ $.HeightDiff }}px);">
+        {{ template "run_summary_month_bar" . }}
+      </div>
+    </a>
+    {{end}}
+
+    {{range .HourSummaries}}
+    <a class="flex-grow-1" style="margin: 1px; min-width: 2px; min-height: {{ $.Height }}px; max-height: {{ $.Height }}px;"
+       href="/run_summary?begin={{.Time.Unix}}&window={{.Duration.Seconds}}"
+       data-toggle="popover"
+       data-trigger="hover"
+       data-placement="bottom"
+       data-html="true"
+       data-title="<small>{{.Time | formatTime}} <small>(5m)</small></small>"
+       data-content="{{ template "run_summary_month_tooltip" . }}"
+       >
+        {{ template "run_summary_month_bar" . }}
+    </a>
+    {{end}}
+  </div>
+  <div class="d-flex justify-content-between">
+    <div style="width: calc(100% * 58 / (58 + 23 + 12));"><small class="text-muted">30d</small></div>
+    <div style="width: calc(100% * 23 / (58 + 23 + 12));"><small class="text-muted">24h</small></div>
+    <div class="flex-grow-1"><small class="text-muted">1h</small></div>
+    <div><small class="text-muted">now</small></div>
+  </div>
+</div>
+{{ end }}
