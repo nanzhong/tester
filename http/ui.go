@@ -201,8 +201,8 @@ func (h *UIHandler) getPackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now()
-	lastWeek := now.Add(-7 * 24 * time.Hour)
+	now := time.Now().UTC()
+	lastWeek := now.Add(-7 * 24 * time.Hour).UTC()
 
 	monthlyTests, err := h.db.ListTestsForPackageInRange(r.Context(), pkg, lastWeek, now)
 	if err != nil {
