@@ -2,11 +2,14 @@ package db
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/nanzhong/tester"
 	"github.com/stretchr/testify/assert"
@@ -14,10 +17,26 @@ import (
 )
 
 func withPG(tb testing.TB, fn func(tb testing.TB, pg *PG)) {
+	pgDSN := os.Getenv("PG_DSN")
 	if pgDSN == "" {
 		tb.Skip("PG_DSN not set, skipping PG tests. Set PG_DSN to run this test.")
 	}
+	conn, err := pgx.Connect(context.Background(), pgDSN)
+	require.NoError(tb, err)
 
+	defer conn.Close(context.Background())
+
+	cfg := conn.Config()
+	testDB := fmt.Sprintf("tester_%d", time.Now().Unix())
+
+	_, err = conn.Exec(context.Background(), fmt.Sprintf("CREATE DATABASE %s WITH OWNER = %s", pgx.Identifier{testDB}.Sanitize(), pgx.Identifier{cfg.User}.Sanitize()))
+	require.NoError(tb, err)
+	defer func() {
+		_, err := conn.Exec(context.Background(), fmt.Sprintf("DROP DATABASE %s", pgx.Identifier{testDB}.Sanitize()))
+		require.NoError(tb, err)
+	}()
+
+	pgDSN = fmt.Sprintf("postgres://%s:%s@%s:%d/%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, testDB)
 	pool, err := pgxpool.Connect(context.Background(), pgDSN)
 	if err != nil {
 		panic(err)
@@ -96,7 +115,7 @@ func TestPG_Test(t *testing.T) {
 			},
 		}
 
-		t.Run("add", func(t *testing.T) {
+		t.Run("AddTest", func(t *testing.T) {
 			err := pg.AddTest(ctx, test1)
 			require.NoError(t, err)
 
@@ -104,7 +123,7 @@ func TestPG_Test(t *testing.T) {
 			require.NoError(t, err)
 		})
 
-		t.Run("get", func(t *testing.T) {
+		t.Run("GetTest", func(t *testing.T) {
 			getTest, err := pg.GetTest(ctx, test1.ID)
 			require.NoError(t, err)
 			assert.True(
@@ -123,128 +142,250 @@ func TestPG_Test(t *testing.T) {
 				"expected to be equal", cmp.Diff([]*tester.Test{test1, test2}, listAllTests),
 			)
 
-			listPkgTests, err := pg.ListTestsForPackage(ctx, "pkg-2", 0)
-			require.NoError(t, err)
-			assert.True(
-				t,
-				cmp.Equal([]*tester.Test{test2}, listPkgTests),
-				"expected to be equal", cmp.Diff([]*tester.Test{test2}, listPkgTests),
-			)
+			t.Run("ListTestsForPackage", func(t *testing.T) {
+				listPkgTests, err := pg.ListTestsForPackage(ctx, "pkg-2", 0)
+				require.NoError(t, err)
+				assert.True(
+					t,
+					cmp.Equal([]*tester.Test{test2}, listPkgTests),
+					"expected to be equal", cmp.Diff([]*tester.Test{test2}, listPkgTests),
+				)
+			})
 
-			listPkgTestsInRange, err := pg.ListTestsForPackageInRange(ctx, "pkg-2", testTime, testTime)
-			require.NoError(t, err)
-			assert.True(
-				t,
-				cmp.Equal([]*tester.Test{test2}, listPkgTestsInRange),
-				"expected to be equal", cmp.Diff([]*tester.Test{test2}, listPkgTestsInRange),
-			)
+			t.Run("ListTestsForPackageInRange", func(t *testing.T) {
+				listPkgTestsInRange, err := pg.ListTestsForPackageInRange(ctx, "pkg-2", testTime, testTime)
+				require.NoError(t, err)
+				assert.True(
+					t,
+					cmp.Equal([]*tester.Test{test2}, listPkgTestsInRange),
+					"expected to be equal", cmp.Diff([]*tester.Test{test2}, listPkgTestsInRange),
+				)
+			})
 		})
 	})
 }
 
-func TestPG_Run(t *testing.T) {
+func TestPG_EnqueueRun_GetRun(t *testing.T) {
 	ctx := context.Background()
-	testTime := time.Now().Truncate(time.Millisecond)
-
-	run1 := &tester.Run{
-		ID:         uuid.New(),
-		Package:    "pkg-1",
-		Args:       []string{"one", "two"},
-		EnqueuedAt: testTime,
-	}
-
-	run2 := &tester.Run{
-		ID:         uuid.New(),
-		Package:    "pkg-2",
-		Args:       []string{"one", "two"},
-		EnqueuedAt: testTime,
-	}
-
-	run3 := &tester.Run{
-		ID:         uuid.New(),
-		Package:    "pkg-3",
-		Args:       []string{"one", "two"},
-		EnqueuedAt: testTime,
-	}
 
 	withPG(t, func(tb testing.TB, pg *PG) {
-		pg.now = func() time.Time { return testTime }
+		run := &tester.Run{
+			ID:      uuid.New(),
+			Package: "pkg",
+			Args:    []string{"one", "two"},
+		}
 
-		t.Run("enqueue", func(t *testing.T) {
-			err := pg.EnqueueRun(ctx, run1)
+		err := pg.EnqueueRun(ctx, run)
+		require.NoError(t, err)
+
+		run, err = pg.GetRun(ctx, run.ID)
+		require.NoError(t, err)
+		assert.NotEmpty(t, run.EnqueuedAt)
+	})
+}
+
+func TestPG_StartRun(t *testing.T) {
+	ctx := context.Background()
+
+	withPG(t, func(tb testing.TB, pg *PG) {
+		run := &tester.Run{
+			ID:      uuid.New(),
+			Package: "pkg",
+			Args:    []string{"one", "two"},
+		}
+
+		err := pg.EnqueueRun(ctx, run)
+		require.NoError(t, err)
+
+		err = pg.StartRun(ctx, run.ID)
+		require.NoError(t, err)
+
+		getRun, err := pg.GetRun(ctx, run.ID)
+		require.NoError(t, err)
+		assert.NotEmpty(t, getRun.StartedAt)
+	})
+}
+
+func TestPG_ResetRun(t *testing.T) {
+	ctx := context.Background()
+
+	withPG(t, func(tb testing.TB, pg *PG) {
+		run := &tester.Run{
+			ID:      uuid.New(),
+			Package: "pkg",
+			Args:    []string{"one", "two"},
+		}
+
+		err := pg.EnqueueRun(ctx, run)
+		require.NoError(t, err)
+
+		err = pg.StartRun(ctx, run.ID)
+		require.NoError(t, err)
+
+		err = pg.ResetRun(ctx, run.ID)
+		require.NoError(t, err)
+
+		getRun, err := pg.GetRun(ctx, run.ID)
+		require.NoError(t, err)
+		assert.Empty(t, getRun.StartedAt)
+	})
+}
+
+func TestPG_DeleteRun(t *testing.T) {
+	ctx := context.Background()
+
+	withPG(t, func(tb testing.TB, pg *PG) {
+		run := &tester.Run{
+			ID:      uuid.New(),
+			Package: "pkg",
+			Args:    []string{"one", "two"},
+		}
+
+		err := pg.EnqueueRun(ctx, run)
+		require.NoError(t, err)
+
+		err = pg.DeleteRun(ctx, run.ID)
+		require.NoError(t, err)
+
+		_, err = pg.GetRun(ctx, run.ID)
+		require.Error(t, err)
+		assert.Equal(t, ErrNotFound, err)
+	})
+}
+
+func TestPG_CompleteRun(t *testing.T) {
+	ctx := context.Background()
+
+	withPG(t, func(tb testing.TB, pg *PG) {
+		run := &tester.Run{
+			ID:      uuid.New(),
+			Package: "pkg",
+			Args:    []string{"one", "two"},
+		}
+
+		err := pg.EnqueueRun(ctx, run)
+		require.NoError(t, err)
+
+		err = pg.StartRun(ctx, run.ID)
+		require.NoError(t, err)
+
+		err = pg.CompleteRun(ctx, run.ID)
+		require.NoError(t, err)
+
+		getRun, err := pg.GetRun(ctx, run.ID)
+		require.NoError(t, err)
+		assert.NotEmpty(t, getRun.FinishedAt)
+	})
+}
+
+func TestPG_FailRun(t *testing.T) {
+	ctx := context.Background()
+
+	withPG(t, func(tb testing.TB, pg *PG) {
+		run := &tester.Run{
+			ID:      uuid.New(),
+			Package: "pkg",
+			Args:    []string{"one", "two"},
+		}
+
+		err := pg.EnqueueRun(ctx, run)
+		require.NoError(t, err)
+
+		err = pg.StartRun(ctx, run.ID)
+		require.NoError(t, err)
+
+		err = pg.FailRun(ctx, run.ID, "error")
+		require.NoError(t, err)
+
+		getRun, err := pg.GetRun(ctx, run.ID)
+		require.NoError(t, err)
+		assert.NotEmpty(t, getRun.FinishedAt)
+		assert.NotEmpty(t, getRun.Error)
+	})
+}
+
+func TestPG_ListRuns(t *testing.T) {
+	ctx := context.Background()
+
+	withPG(t, func(tb testing.TB, pg *PG) {
+		runPending := &tester.Run{
+			ID:      uuid.New(),
+			Package: "pkg",
+		}
+
+		runComplete := &tester.Run{
+			ID:      uuid.New(),
+			Package: "pkg",
+		}
+
+		runFail := &tester.Run{
+			ID:      uuid.New(),
+			Package: "pkg",
+		}
+
+		for _, r := range []*tester.Run{runPending, runComplete, runFail} {
+			err := pg.EnqueueRun(ctx, r)
 			require.NoError(t, err)
 
-			err = pg.EnqueueRun(ctx, run2)
+			err = pg.StartRun(ctx, r.ID)
 			require.NoError(t, err)
+		}
 
-			err = pg.EnqueueRun(ctx, run3)
-			require.NoError(t, err)
-		})
+		runPending, err := pg.GetRun(ctx, runPending.ID)
+		require.NoError(t, err)
 
-		t.Run("get", func(t *testing.T) {
-			getRun, err := pg.GetRun(ctx, run1.ID)
-			require.NoError(t, err)
-			assert.Equal(t, run1, getRun)
-		})
+		err = pg.CompleteRun(ctx, runComplete.ID)
+		require.NoError(t, err)
+		runComplete, err = pg.GetRun(ctx, runComplete.ID)
+		require.NoError(t, err)
 
-		t.Run("start", func(t *testing.T) {
-			err := pg.StartRun(ctx, run1.ID)
-			require.NoError(t, err)
+		err = pg.FailRun(ctx, runFail.ID, "error")
+		require.NoError(t, err)
+		runFail, err = pg.GetRun(ctx, runFail.ID)
+		require.NoError(t, err)
 
-			err = pg.StartRun(ctx, run2.ID)
-			require.NoError(t, err)
-		})
-
-		t.Run("complete", func(t *testing.T) {
-			err := pg.CompleteRun(ctx, run1.ID)
-			require.NoError(t, err)
-			run1, err = pg.GetRun(ctx, run1.ID)
-			require.NoError(t, err)
-		})
-
-		t.Run("fail", func(t *testing.T) {
-			err := pg.FailRun(ctx, run2.ID, "error")
-			require.NoError(t, err)
-			run2, err = pg.GetRun(ctx, run2.ID)
-			require.NoError(t, err)
-		})
-
-		t.Run("list", func(t *testing.T) {
+		t.Run("ListPendingRuns", func(t *testing.T) {
 			runs, err := pg.ListPendingRuns(ctx)
+			for _, r := range runs {
+				fmt.Printf("%#v\n", r)
+			}
 			require.NoError(t, err)
-			assert.ElementsMatch(t, []*tester.Run{run3}, runs)
-
-			runs, err = pg.ListFinishedRuns(ctx, 0)
-			require.NoError(t, err)
-			assert.ElementsMatch(t, []*tester.Run{run1, run2}, runs)
-
-			runs, err = pg.ListRunsForPackage(ctx, "pkg-3", 0)
-			require.NoError(t, err)
-			assert.ElementsMatch(t, []*tester.Run{run3}, runs)
+			assert.ElementsMatch(t, []*tester.Run{runPending}, runs)
 		})
 
-		t.Run("reset", func(t *testing.T) {
-			err := pg.ResetRun(ctx, run3.ID)
+		t.Run("ListPendingRuns", func(t *testing.T) {
+			runs, err := pg.ListFinishedRuns(ctx, 0)
 			require.NoError(t, err)
-
-			runs, err := pg.ListPendingRuns(ctx)
-			require.NoError(t, err)
-			assert.Subset(t, runs, []*tester.Run{run3})
-
-			t.Run("finshed run", func(t *testing.T) {
-				err := pg.ResetRun(ctx, run1.ID)
-				require.Error(t, err)
-				assert.Equal(t, ErrNotFound, err)
-			})
+			assert.ElementsMatch(t, []*tester.Run{runComplete, runFail}, runs)
 		})
+	})
+}
 
-		t.Run("delete", func(t *testing.T) {
-			err := pg.DeleteRun(ctx, run3.ID)
+func TestPG_ListRunsForPackage(t *testing.T) {
+	ctx := context.Background()
+
+	withPG(t, func(tb testing.TB, pg *PG) {
+		runs := []*tester.Run{
+			{
+				ID:      uuid.New(),
+				Package: "pkg-1",
+			},
+			{
+				ID:      uuid.New(),
+				Package: "pkg-2",
+			},
+		}
+
+		for _, r := range runs {
+			err := pg.EnqueueRun(ctx, r)
 			require.NoError(t, err)
-			runs, err := pg.ListPendingRuns(ctx)
+			r, err = pg.GetRun(ctx, r.ID)
 			require.NoError(t, err)
-			assert.NotSubset(t, runs, []*tester.Run{run3})
-		})
+		}
+
+		runs, err := pg.ListRunsForPackage(ctx, "pkg-1", 0)
+		require.NoError(t, err)
+		assert.ElementsMatch(t, []*tester.Run{runs[0]}, runs)
 	})
 }
 
