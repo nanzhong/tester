@@ -23,7 +23,7 @@
 
       <hr>
 
-      <h2>Tests</h2>
+      <h2>Tests <small class="text-muted">(last 7d)</small></h2>
       {{ range $name, $tests := .TestsByName }}
       <h3>{{ $name }}</h3>
       <div class="row">
@@ -113,6 +113,8 @@
                       displayFormats: {
                         day: "MMM D, YYYY"
                       },
+                      min: new Date("{{ $.LastWeek | formatTimeRFC3339 }}"),
+                      max: new Date("{{ $.Now | formatTimeRFC3339 }}"),
 		    },
 		    scaleLabel: {
 		      display: true,
