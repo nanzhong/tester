@@ -201,8 +201,8 @@ func (h *UIHandler) getPackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now()
-	lastWeek := now.Add(-7 * 24 * time.Hour)
+	now := time.Now().UTC()
+	lastWeek := now.Add(-7 * 24 * time.Hour).UTC()
 
 	monthlyTests, err := h.db.ListTestsForPackageInRange(r.Context(), pkg, lastWeek, now)
 	if err != nil {
@@ -241,11 +241,15 @@ func (h *UIHandler) getPackage(w http.ResponseWriter, r *http.Request) {
 		MonthlyPackageRunSummary *monthlyPackageRunSummary
 		LatestRuns               []*tester.Run
 		TestsByName              map[string][]*tester.Test
+		Now                      time.Time
+		LastWeek                 time.Time
 	}{
 		Name:                     pkg,
 		MonthlyPackageRunSummary: monthlyRunSummary,
 		LatestRuns:               latestRuns,
 		TestsByName:              monthlyTestsByName,
+		Now:                      now,
+		LastWeek:                 lastWeek,
 	}
 
 	h.Render(w, r, "package_details", value)

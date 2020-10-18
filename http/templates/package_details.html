@@ -23,7 +23,7 @@
 
       <hr>
 
-      <h2>Tests</h2>
+      <h2>Tests <small class="text-muted">(last 7d)</small></h2>
       {{ range $name, $tests := .TestsByName }}
       <h3>{{ $name }}</h3>
       <div class="row">
@@ -37,45 +37,45 @@
                   {
                     label: "passed",
 		    data: [
-                      {{ range $tests }}
-                      {{ if eq .Result.State "passed" }}
+                      {{ range $tests -}}
+                      {{ if eq .Result.State "passed" -}}
                       {
-                        x: new Date("{{ .Result.StartedAt | formatTimeRFC3339 }}"),
-                        y: {{ .Result.Duration.Seconds }},
-                        id: {{ .ID }},
+                        x: luxon.DateTime.fromISO("{{- .Result.StartedAt | formatTimeRFC3339 -}}"),
+                        y: {{- .Result.Duration.Seconds -}},
+                        id: {{- .ID -}},
                       },
-                      {{ end }}
-                      {{ end }}
+                      {{- end }}
+                      {{- end }}
                     ],
                     backgroundColor: '#198754',
 		  },
                   {
                     label: "failed",
 		    data: [
-                      {{ range $tests }}
-                      {{ if eq .Result.State "failed" }}
+                      {{ range $tests -}}
+                      {{ if eq .Result.State "failed" -}}
                       {
-                        x: new Date("{{ .Result.StartedAt | formatTimeRFC3339 }}"),
-                        y: {{ .Result.Duration.Seconds }},
-                        id: {{ .ID }},
+                        x: luxon.DateTime.fromISO("{{- .Result.StartedAt | formatTimeRFC3339 -}}"),
+                        y: {{- .Result.Duration.Seconds -}},
+                        id: {{- .ID -}},
                       },
-                      {{ end }}
-                      {{ end }}
+                      {{- end }}
+                      {{- end }}
                     ],
                     backgroundColor: '#dc3545',
                   },
                   {
                     label: "skipped",
 		    data: [
-                      {{ range $tests }}
-                      {{ if eq .Result.State "skipped" }}
+                      {{ range $tests -}}
+                      {{ if eq .Result.State "skipped" -}}
                       {
-                        x: new Date("{{ .Result.StartedAt | formatTimeRFC3339 }}"),
-                        y: {{ .Result.Duration.Seconds }},
-                        id: {{ .ID }},
+                        x: luxon.DateTime.fromISO("{{- .Result.StartedAt | formatTimeRFC3339 -}}"),
+                        y: {{- .Result.Duration.Seconds -}},
+                        id: {{- .ID -}},
                       },
-                      {{ end }}
-                      {{ end }}
+                      {{- end }}
+                      {{- end }}
                     ],
                     backgroundColor: '#ffc107',
                   },
@@ -87,39 +87,52 @@
                 },
                 tooltips: {
                   callbacks: {
-                    label: function(tooltipItem, data) {
-                      return data.datasets[tooltipItem.datasetIndex].data[tooltipItem.index].id;
+                    title: function(context) {
+                      if (!context || context.length === 0) {
+                        return null;
+                      }
+                      var data = context[0].dataset.data[context[0].dataIndex];
+                      return data.id;
                     },
-                    label: function(tooltipItem, data) {
-                      var label = 'Duration (s): ';
-                      label += data.datasets[tooltipItem.datasetIndex].data[tooltipItem.index].y;
+                    label: function(context) {
+                      var data = context.dataset.data[context.dataIndex];
+                      var label = data.y.toFixed(2);
+                      label += "s @ "
+                      label += data.x.toFormat("DD H:mm:ss");
                       return label;
                     },
                   },
                 },
                 onClick: function(e, el) {
-                  if (el.length === 0) {
+                  if (!el || el.length === 0) {
                     return
                   }
-                  var testID = el[0]._chart.config.data.datasets[el[0]._datasetIndex].data[el[0]._index].id;
+                  var data = e.chart.data.datasets[el[0].datasetIndex].data[el[0].index];
+                  var testID = data.id;
                   location.href = "/tests/" + testID;
                 },
 		scales: {
-		  xAxes: [{
+		  x: {
 		    type: 'time',
+                    adapters: {
+                      date: {
+                        zone: "utc",
+                      },
+                    },
+                    min: "{{- $.LastWeek | formatTimeRFC3339 -}}",
+                    max: "{{- $.Now | formatTimeRFC3339 -}}",
                     time: {
-                      distribution: 'linear',
                       unit: 'day',
                       displayFormats: {
-                        day: "MMM D, YYYY"
+                        day: "DD"
                       },
 		    },
 		    scaleLabel: {
 		      display: true,
 		      labelString: 'Time'
 		    }
-		  }],
-                  yAxes: [{
+		  },
+                  y: {
                     scaleLabel: {
                       display: true,
                       labelString: 'Duration (s)',
@@ -127,7 +140,7 @@
                     ticks: {
                       precision: 3,
                     },
-                  }],
+                  },
 		},
                 maintainAspectRatio: false,
 	      }
