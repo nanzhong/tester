@@ -27,7 +27,7 @@ func withPG(tb testing.TB, fn func(tb testing.TB, pg *PG)) {
 	defer conn.Close(context.Background())
 
 	cfg := conn.Config()
-	testDB := fmt.Sprintf("tester_%d", time.Now().Unix())
+	testDB := fmt.Sprintf("tester_%d", time.Now().UnixNano())
 
 	_, err = conn.Exec(context.Background(), fmt.Sprintf("CREATE DATABASE %s WITH OWNER = %s", pgx.Identifier{testDB}.Sanitize(), pgx.Identifier{cfg.User}.Sanitize()))
 	require.NoError(tb, err)
