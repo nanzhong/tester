@@ -23,7 +23,7 @@ type UIHandler struct {
 	http.Handler
 
 	db       db.DB
-	packages []tester.Package
+	packages []*tester.Package
 
 	mu                 sync.Mutex
 	hourSummaries      []*tester.RunSummary
@@ -33,7 +33,7 @@ type UIHandler struct {
 }
 
 // NewUIHandler constructs a new `UIHandler`.
-func NewUIHandler(db db.DB, packages []tester.Package) *UIHandler {
+func NewUIHandler(db db.DB, packages []*tester.Package) *UIHandler {
 	handler := &UIHandler{
 		db:       db,
 		packages: packages,

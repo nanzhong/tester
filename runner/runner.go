@@ -3,6 +3,7 @@ package runner
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,10 +69,10 @@ func WithPackages(pkgs []string) Option {
 	}
 }
 
-// WithTestBinPath allows configuring the path where test binaries can be found.
-func WithTestBinPath(path string) Option {
+// WithTestBinsPath allows configuring the path where test binaries can be found.
+func WithTestBinsPath(path string) Option {
 	return func(runner *Runner) {
-		runner.testBinPath = path
+		runner.testBinsPath = path
 	}
 }
 
@@ -87,7 +88,7 @@ type Runner struct {
 	testerAddr        string
 	apiKey            string
 	packages          []string
-	testBinPath       string
+	testBinsPath      string
 	localTestBinsOnly bool
 
 	stop     chan struct{}
@@ -107,9 +108,9 @@ func New(opts ...Option) (*Runner, error) {
 		opt(runner)
 	}
 
-	if runner.testBinPath == "" {
+	if runner.testBinsPath == "" {
 		var err error
-		runner.testBinPath, err = ioutil.TempDir("", "tester_bin")
+		runner.testBinsPath, err = ioutil.TempDir("", "tester_bin")
 		if err != nil {
 			return nil, fmt.Errorf("creating directory for storing test binaries: %w", err)
 		}
@@ -145,65 +146,108 @@ func (r *Runner) Stop(ctx context.Context) {
 	case <-ctx.Done():
 		r.kill()
 	}
-	if err := os.Remove(r.testBinPath); err != nil {
+	if err := os.Remove(r.testBinsPath); err != nil {
 		log.Printf("failed to cleanup test bin dir: %s", err)
 	}
 }
 
-func (r *Runner) packageTestBinaryPath(ctx context.Context, pkg string) (string, error) {
-	binPath := fmt.Sprintf("%s/%s", r.testBinPath, pkg)
-	finfo, err := os.Stat(binPath)
+func (r *Runner) testBinaryPath(pkg string) string {
+	return fmt.Sprintf("%s/%s", r.testBinsPath, pkg)
+}
 
-	// Does the binary already exist? If so we can skip a lot of this.
-	if err == nil && finfo.Mode().Perm()&0100 != 0 {
-		return binPath, nil
-	}
-
-	// Is the binary missing and are we not allowed to retrieve remote bins?
-	if os.IsNotExist(err) && r.localTestBinsOnly {
-		return "", ErrTestBinMissing
-	}
-
+func (r *Runner) getPackageInfo(ctx context.Context, pkg string) (*tester.Package, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/api/packages/%s/download", r.testerAddr, pkg),
+		fmt.Sprintf("%s/api/packages/%s", r.testerAddr, pkg),
 		nil,
 	)
 	if err != nil {
-		return "", fmt.Errorf("constructing download request: %w", err)
+		return nil, fmt.Errorf("constructing get package request: %w", err)
 	}
 	r.authAPIRequest(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("downloading test binary: %w", err)
+		return nil, fmt.Errorf("getting package info: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("received unexpected status code downloading test binary: %d", resp.StatusCode)
+		return nil, fmt.Errorf("received unexpected status code getting package info: %d", resp.StatusCode)
 	}
 
-	bin, err := os.Create(binPath)
+	var packageInfo tester.Package
+	err = json.NewDecoder(resp.Body).Decode(&packageInfo)
 	if err != nil {
-		return "", fmt.Errorf("creating test binary: %w", err)
+		return nil, fmt.Errorf("parsing package info: %w", err)
+	}
+	return &packageInfo, nil
+}
+
+func (r *Runner) downloadTestBinary(ctx context.Context, pkg *tester.Package) error {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("%s/api/packages/%s/download", r.testerAddr, pkg.Name),
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("constructing download request: %w", err)
+	}
+	r.authAPIRequest(req)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("downloading test binary: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("received unexpected status code downloading test binary: %d", resp.StatusCode)
+	}
+
+	hash := sha256.New()
+	bin, err := os.Create(r.testBinaryPath(pkg.Name))
+	if err != nil {
+		return fmt.Errorf("creating test binary: %w", err)
 	}
 	defer bin.Close()
 
-	if _, err := io.Copy(bin, resp.Body); err != nil {
-		return "", fmt.Errorf("writing test binary: %w", err)
+	multiWriter := io.MultiWriter(hash, bin)
+	if _, err := io.Copy(multiWriter, resp.Body); err != nil {
+		return fmt.Errorf("writing test binary: %w", err)
 	}
 
-	finfo, err = bin.Stat()
+	downloadedSHA256Sum := fmt.Sprintf("%x", hash.Sum(nil))
+	if pkg.SHA256Sum != downloadedSHA256Sum {
+		return fmt.Errorf("downloaded test binary is invalid: %s (expected) != %s (actual)", pkg.SHA256Sum, downloadedSHA256Sum)
+	}
+
+	finfo, err := bin.Stat()
 	if err != nil {
-		return "", fmt.Errorf("stating test binary: %w", err)
+		return fmt.Errorf("stating test binary: %w", err)
 	}
-	if err := os.Chmod(binPath, finfo.Mode().Perm()|0100); err != nil {
-		return "", fmt.Errorf("making test binary executable: %w", err)
+	if err := os.Chmod(r.testBinaryPath(pkg.Name), finfo.Mode().Perm()|0100); err != nil {
+		return fmt.Errorf("making test binary executable: %w", err)
 	}
+	return nil
+}
 
-	return binPath, nil
+func (r *Runner) verifyLocalTestBinary(ctx context.Context, pkg *tester.Package) (bool, error) {
+	bin, err := os.Open(r.testBinaryPath(pkg.Name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("opening test binary for verification: %w", err)
+	}
+	defer bin.Close()
+
+	hash := sha256.New()
+	io.Copy(hash, bin)
+
+	return pkg.SHA256Sum == fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
 func (r *Runner) claimRun(ctx context.Context) (*tester.Run, error) {
@@ -254,9 +298,23 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		return nil
 	}
 
-	binPath, err := r.packageTestBinaryPath(ctx, run.Package)
+	pkg, err := r.getPackageInfo(ctx, run.Package)
 	if err != nil {
-		return fmt.Errorf("determining test binary for package %s: %w", run.Package, err)
+		return fmt.Errorf("getting package info: %w", err)
+	}
+
+	valid, err := r.verifyLocalTestBinary(ctx, pkg)
+	if err != nil {
+		return fmt.Errorf("verifying local test binary: %w", err)
+	}
+	if !valid {
+		if r.localTestBinsOnly {
+			return fmt.Errorf("local test binary not found and remote download of test binaries disabled")
+		}
+
+		if err := r.downloadTestBinary(ctx, pkg); err != nil {
+			return fmt.Errorf("downloading test binary: %w", err)
+		}
 	}
 
 	log.Printf("starting run for %s (%s) with options: %s", run.Package, run.ID, strings.Join(run.Args, " "))
@@ -278,7 +336,7 @@ func (r *Runner) runOnce(ctx context.Context) error {
 	reader, writer := io.Pipe()
 	teeReader := io.TeeReader(reader, &stdout)
 
-	testCmd := exec.CommandContext(ctx, binPath, runArgs...)
+	testCmd := exec.CommandContext(ctx, r.testBinaryPath(pkg.Name), runArgs...)
 	testCmd.Stdout = writer
 	testCmd.Stderr = &stderr
 

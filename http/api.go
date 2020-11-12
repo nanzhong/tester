@@ -23,14 +23,14 @@ type APIHandler struct {
 	http.Handler
 
 	db           db.DB
-	packages     map[string]tester.Package
+	packages     map[string]*tester.Package
 	alertManager *alerting.AlertManager
 	slackApp     *slack.App
 	apiKey       string
 }
 
 // NewAPIHandler constructs a new `APIHandler`.
-func NewAPIHandler(db db.DB, packages []tester.Package, opts ...Option) *APIHandler {
+func NewAPIHandler(db db.DB, packages []*tester.Package, opts ...Option) *APIHandler {
 	defOpts := &options{
 		alertManager: &alerting.AlertManager{},
 	}
@@ -41,7 +41,7 @@ func NewAPIHandler(db db.DB, packages []tester.Package, opts ...Option) *APIHand
 
 	handler := &APIHandler{
 		db:           db,
-		packages:     make(map[string]tester.Package),
+		packages:     make(map[string]*tester.Package),
 		alertManager: defOpts.alertManager,
 		slackApp:     defOpts.slackApp,
 		apiKey:       defOpts.apiKey,

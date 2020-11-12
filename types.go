@@ -68,16 +68,22 @@ type Run struct {
 	Error      string    `json:"error"`
 }
 
+// RunMeta is additional metadata associated with the run.
+type RunMeta struct {
+	RunnerHostname string `json:"runner_hostname"`
+}
+
 func (r *Run) Duration() time.Duration {
 	return r.FinishedAt.Sub(r.StartedAt)
 }
 
 // Package represents a go package that can be tested or benchmarked.
 type Package struct {
-	Name     string        `json:"name"`
-	Path     string        `json:"path"`
-	RunDelay time.Duration `json:"run_delay"`
-	Options  []Option      `json:"options"`
+	Name      string        `json:"name"`
+	Path      string        `json:"path"`
+	SHA256Sum string        `json:"sha256sum"`
+	RunDelay  time.Duration `json:"run_delay"`
+	Options   []Option      `json:"options"`
 }
 
 // Option represents an option for how a package can be run.

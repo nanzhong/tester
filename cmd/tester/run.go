@@ -23,7 +23,7 @@ var runCmd = &cobra.Command{
 			opts = append(opts, runner.WithAPIKey(apiKey))
 		}
 		if testBinsPath := viper.GetString("run-test-bins-path"); testBinsPath != "" {
-			opts = append(opts, runner.WithTestBinPath(testBinsPath))
+			opts = append(opts, runner.WithTestBinsPath(testBinsPath))
 		}
 		if localTestBinsOnly := viper.GetBool("run-local-test-bins-only"); localTestBinsOnly {
 			opts = append(opts, runner.WithLocalTestBinsOnly())

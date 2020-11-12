@@ -66,14 +66,14 @@ func WithScheduler(scheduler *scheduler.Scheduler) Option {
 }
 
 type App struct {
-	packages []tester.Package
+	packages []*tester.Package
 
 	*options
 
 	usageMessage *slack.Message
 }
 
-func NewApp(packages []tester.Package, opts ...Option) *App {
+func NewApp(packages []*tester.Package, opts ...Option) *App {
 	defOpts := &options{}
 
 	for _, opt := range opts {
@@ -318,7 +318,7 @@ func (a *App) helpMessage(command string) *slack.Message {
 func (a *App) getPackage(name string) (*tester.Package, error) {
 	for _, p := range a.packages {
 		if p.Name == name {
-			return &p, nil
+			return p, nil
 		}
 	}
 	return nil, fmt.Errorf("unknown package: %s", name)

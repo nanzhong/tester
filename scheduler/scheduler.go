@@ -40,7 +40,7 @@ func WithRunTimeout(d time.Duration) Option {
 
 // Scheduler schedules runs.
 type Scheduler struct {
-	Packages []tester.Package
+	Packages []*tester.Package
 
 	stop            chan struct{}
 	lastScheduledAt map[string]time.Time
@@ -50,7 +50,7 @@ type Scheduler struct {
 }
 
 // NewScheduler constructs a new scheduler.
-func NewScheduler(db db.DB, packages []tester.Package, opts ...Option) *Scheduler {
+func NewScheduler(db db.DB, packages []*tester.Package, opts ...Option) *Scheduler {
 	defOpts := &options{
 		runDelay:   5 * time.Minute,
 		runTimeout: 15 * time.Minute,
@@ -74,7 +74,7 @@ func (s *Scheduler) Schedule(ctx context.Context, packageName string, args ...st
 	var pkg *tester.Package
 	for _, p := range s.Packages {
 		if p.Name == packageName {
-			pkg = &p
+			pkg = p
 			break
 		}
 	}
@@ -163,7 +163,7 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 		pendingRuns[run.Package] = run
 	}
 
-	packagesToRun := make([]tester.Package, len(s.Packages))
+	packagesToRun := make([]*tester.Package, len(s.Packages))
 	copy(packagesToRun, s.Packages)
 	rand.Shuffle(len(packagesToRun), func(i int, j int) {
 		packagesToRun[i], packagesToRun[j] = packagesToRun[j], packagesToRun[i]
