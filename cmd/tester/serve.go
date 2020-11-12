@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -41,6 +44,19 @@ var serveCmd = &cobra.Command{
 		err = json.NewDecoder(file).Decode(&cfg)
 		if err != nil {
 			log.Fatalf("failed to parse config (%s): %s", configPath, err)
+		}
+
+		for _, pkg := range cfg.Packages {
+			pkgBin, err := os.Open(pkg.Path)
+			if err != nil {
+				log.Fatalf("failed to open %s for verification: %s", pkg.Path, err)
+			}
+
+			hash := sha256.New()
+			io.Copy(hash, pkgBin)
+			pkg.SHA256Sum = fmt.Sprintf("%x", hash.Sum(nil))
+
+			pkgBin.Close()
 		}
 
 		l, err := net.Listen("tcp", viper.GetString("serve-addr"))
@@ -106,7 +122,7 @@ var serveCmd = &cobra.Command{
 		}
 
 		uiHandler := testerhttp.NewUIHandler(dbStore, cfg.Packages)
-		apiHandler := testerhttp.NewAPIHandler(dbStore, httpOpts...)
+		apiHandler := testerhttp.NewAPIHandler(dbStore, cfg.Packages, httpOpts...)
 
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())

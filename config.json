@@ -2,18 +2,7 @@
   "packages": [
     {
       "name": "db",
-      "path": "db.test",
-      "options": [
-        {
-          "name": "test.timeout",
-          "description": "Maximum time tests can run for",
-          "default": "1m"
-        }
-      ]
-    },
-    {
-      "name": "example",
-      "path": "example.test",
+      "path": "/bin/db.test",
       "options": [
         {
           "name": "test.timeout",
@@ -27,9 +16,6 @@
     "run_timeout": "1m"
   },
   "slack": {
-    "default_channels": [ "alerts" ],
-    "custom_channels": {
-      "example": [ "alerts-example" ]
-    }
+    "default_channels": [ "alerts" ]
   }
 }

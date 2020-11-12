@@ -8,7 +8,7 @@ PG_DSN ?= postgres://$(PG_USER):$(PG_PASS)@$(PG_ADDR)/$(PG_NAME)?sslmode=disable
 
 .PHONY: dev/up
 dev/up:
-	docker run -d \
+	docker run --rm -d \
 		--name tester-pg \
 		-e POSTGRES_USER=$(PG_USER) \
 		-e POSTGRES_PASSWORD=$(PG_PASS) \

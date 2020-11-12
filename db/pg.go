@@ -185,18 +185,40 @@ func (p *PG) EnqueueRun(ctx context.Context, run *tester.Run) error {
 	return err
 }
 
-func (p *PG) StartRun(ctx context.Context, id uuid.UUID) error {
-	q := psq.Update("runs").
-		Set("started_at", p.now()).
-		Where("id = ?", id)
+func (p *PG) StartRun(ctx context.Context, id uuid.UUID, runner string) error {
+	return p.tx(ctx, func(tx pgx.Tx) error {
+		r := &pgRun{}
+		q := psq.Select(r.Columns()...).
+			From("runs").
+			Where("id = ?", id)
 
-	sql, args, err := q.ToSql()
-	if err != nil {
+		sql, args, err := q.ToSql()
+		if err != nil {
+			return err
+		}
+
+		row := p.pool.QueryRow(ctx, sql, args...)
+		err = r.Scan(row)
+		if err != nil {
+			return err
+		}
+
+		r.Meta.Runner = runner
+
+		uq := psq.Update("runs").
+			Set("started_at", p.now()).
+			Set("meta", r.Meta).
+			Where("id = ?", id)
+
+		sql, args, err = uq.ToSql()
+		if err != nil {
+			return err
+		}
+
+		_, err = p.pool.Exec(ctx, sql, args...)
 		return err
-	}
+	})
 
-	_, err = p.pool.Exec(ctx, sql, args...)
-	return err
 }
 
 func (p *PG) ResetRun(ctx context.Context, id uuid.UUID) error {

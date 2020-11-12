@@ -44,4 +44,13 @@ CREATE INDEX ON runs (started_at, finished_at);
 DROP INDEX runs_started_at_finished_at_idx;
 `,
 	},
+	{
+		name: "add meta column to runs",
+		up: `
+ALTER TABLE runs ADD COLUMN meta jsonb NOT NULL DEFAULT '{}'::jsonb;
+`,
+		down: `
+ALTER TABLE runs DROP COLUMN meta;
+`,
+	},
 }

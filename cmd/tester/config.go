@@ -3,9 +3,9 @@ package main
 import "github.com/nanzhong/tester"
 
 type config struct {
-	Packages  []tester.Package `json:"packages"`
-	Scheduler *schedulerConfig `json:"scheduler"`
-	Slack     *slackConfig     `json:"slack"`
+	Packages  []*tester.Package `json:"packages"`
+	Scheduler *schedulerConfig  `json:"scheduler"`
+	Slack     *slackConfig      `json:"slack"`
 }
 
 type schedulerConfig struct {
