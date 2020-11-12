@@ -167,6 +167,11 @@ func (h *APIHandler) claimRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(packages) == 0 {
+		for _, pkg := range h.packages {
+			packages = append(packages, pkg.Name)
+		}
+	}
 	supportedPackages := make(map[string]struct{})
 	for _, pkg := range packages {
 		supportedPackages[pkg] = struct{}{}

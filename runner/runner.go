@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -18,7 +20,13 @@ import (
 	"github.com/nanzhong/tester"
 )
 
-var resultSubmissionTimeout = 60 * time.Second
+var (
+	// ErrTestBinMissing is returned when an expected test binary could not be
+	// found.
+	ErrTestBinMissing = errors.New("test binary not found")
+
+	resultSubmissionTimeout = 60 * time.Second
+)
 
 // TBRunConfig is the configuration for a test/benchmark that the Runner should
 // schedule.
@@ -36,56 +44,78 @@ type tbRunner struct {
 	cancel context.CancelFunc
 }
 
-type options struct {
-	testerAddr string
-	apiKey     string
-}
-
 // Option is used to inject dependencies into a Server on creation.
-type Option func(*options)
+type Option func(*Runner)
 
 // WithTesterAddr allows configuring a custom address for the tester server.
 func WithTesterAddr(addr string) Option {
-	return func(opts *options) {
-		opts.testerAddr = addr
+	return func(runner *Runner) {
+		runner.testerAddr = addr
 	}
 }
 
 // WithAPIKey allows configuring an api key for authentication.
 func WithAPIKey(key string) Option {
-	return func(opts *options) {
-		opts.apiKey = key
+	return func(runner *Runner) {
+		runner.apiKey = key
+	}
+}
+
+// WithPackages allows configuring packages to run.
+func WithPackages(pkgs []string) Option {
+	return func(runner *Runner) {
+		runner.packages = pkgs
+	}
+}
+
+// WithTestBinPath allows configuring the path where test binaries can be found.
+func WithTestBinPath(path string) Option {
+	return func(runner *Runner) {
+		runner.testBinPath = path
+	}
+}
+
+// WithLocalTestBinsOnly allows disabling download of test binaries from server.
+func WithLocalTestBinsOnly() Option {
+	return func(runner *Runner) {
+		runner.localTestBinsOnly = true
 	}
 }
 
 // Runner is the implementation of the test runner.
 type Runner struct {
-	testerAddr string
-	apiKey     string
-	packages   []tester.Package
+	testerAddr        string
+	apiKey            string
+	packages          []string
+	testBinPath       string
+	localTestBinsOnly bool
 
 	stop     chan struct{}
 	finished chan struct{}
 	kill     context.CancelFunc
 }
 
-func New(packages []tester.Package, opts ...Option) *Runner {
-	defOpts := &options{
+func New(opts ...Option) (*Runner, error) {
+	runner := &Runner{
 		testerAddr: "0.0.0.0:8080",
-	}
-
-	for _, opt := range opts {
-		opt(defOpts)
-	}
-
-	return &Runner{
-		testerAddr: defOpts.testerAddr,
-		apiKey:     defOpts.apiKey,
-		packages:   packages,
 
 		stop:     make(chan struct{}),
 		finished: make(chan struct{}),
 	}
+
+	for _, opt := range opts {
+		opt(runner)
+	}
+
+	if runner.testBinPath == "" {
+		var err error
+		runner.testBinPath, err = ioutil.TempDir("", "tester_bin")
+		if err != nil {
+			return nil, fmt.Errorf("creating directory for storing test binaries: %w", err)
+		}
+	}
+
+	return runner, nil
 }
 
 func (r *Runner) Run() {
@@ -110,27 +140,81 @@ func (r *Runner) Run() {
 
 func (r *Runner) Stop(ctx context.Context) {
 	close(r.stop)
-
 	select {
 	case <-r.finished:
 	case <-ctx.Done():
 		r.kill()
 	}
+	if err := os.Remove(r.testBinPath); err != nil {
+		log.Printf("failed to cleanup test bin dir: %s", err)
+	}
+}
+
+func (r *Runner) packageTestBinaryPath(ctx context.Context, pkg string) (string, error) {
+	binPath := fmt.Sprintf("%s/%s", r.testBinPath, pkg)
+	finfo, err := os.Stat(binPath)
+
+	// Does the binary already exist? If so we can skip a lot of this.
+	if err == nil && finfo.Mode().Perm()&0100 != 0 {
+		return binPath, nil
+	}
+
+	// Is the binary missing and are we not allowed to retrieve remote bins?
+	if os.IsNotExist(err) && r.localTestBinsOnly {
+		return "", ErrTestBinMissing
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("%s/api/packages/%s/download", r.testerAddr, pkg),
+		nil,
+	)
+	if err != nil {
+		return "", fmt.Errorf("constructing download request: %w", err)
+	}
+	r.authAPIRequest(req)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("downloading test binary: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("received unexpected status code downloading test binary: %d", resp.StatusCode)
+	}
+
+	bin, err := os.Create(binPath)
+	if err != nil {
+		return "", fmt.Errorf("creating test binary: %w", err)
+	}
+	defer bin.Close()
+
+	if _, err := io.Copy(bin, resp.Body); err != nil {
+		return "", fmt.Errorf("writing test binary: %w", err)
+	}
+
+	finfo, err = bin.Stat()
+	if err != nil {
+		return "", fmt.Errorf("stating test binary: %w", err)
+	}
+	if err := os.Chmod(binPath, finfo.Mode().Perm()|0100); err != nil {
+		return "", fmt.Errorf("making test binary executable: %w", err)
+	}
+
+	return binPath, nil
 }
 
 func (r *Runner) claimRun(ctx context.Context) (*tester.Run, error) {
-	var packages []string
-	for _, pkg := range r.packages {
-		packages = append(packages, pkg.Name)
-	}
-	body, err := json.Marshal(packages)
+	body, err := json.Marshal(r.packages)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling claim request to json: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(
 		ctx,
-		"POST",
+		http.MethodPost,
 		fmt.Sprintf("%s/api/runs/claim", r.testerAddr),
 		bytes.NewBuffer(body),
 	)
@@ -170,18 +254,12 @@ func (r *Runner) runOnce(ctx context.Context) error {
 		return nil
 	}
 
-	var pkg *tester.Package
-	for _, p := range r.packages {
-		if p.Name == run.Package {
-			pkg = &p
-			break
-		}
-	}
-	if pkg == nil {
-		return fmt.Errorf("unknown package: %s", run.Package)
+	binPath, err := r.packageTestBinaryPath(ctx, run.Package)
+	if err != nil {
+		return fmt.Errorf("determining test binary for package %s: %w", run.Package, err)
 	}
 
-	log.Printf("starting run for %s (%s) with options: %s", pkg.Name, run.ID, strings.Join(run.Args, " "))
+	log.Printf("starting run for %s (%s) with options: %s", run.Package, run.ID, strings.Join(run.Args, " "))
 	var (
 		stdout       bytes.Buffer
 		stderr       bytes.Buffer
@@ -200,7 +278,7 @@ func (r *Runner) runOnce(ctx context.Context) error {
 	reader, writer := io.Pipe()
 	teeReader := io.TeeReader(reader, &stdout)
 
-	testCmd := exec.CommandContext(ctx, pkg.Path, runArgs...)
+	testCmd := exec.CommandContext(ctx, binPath, runArgs...)
 	testCmd.Stdout = writer
 	testCmd.Stderr = &stderr
 
@@ -286,7 +364,7 @@ func (r *Runner) submitTestResult(test *tester.Test, run *tester.Run) error {
 	defer cancel()
 	req, err := http.NewRequestWithContext(
 		ctx,
-		"POST",
+		http.MethodPost,
 		fmt.Sprintf("%s/api/tests", r.testerAddr),
 		bytes.NewBuffer(jsonTest),
 	)
@@ -317,7 +395,7 @@ func (r *Runner) failRun(runID uuid.UUID, errorMessage string) error {
 	defer cancel()
 	req, err := http.NewRequestWithContext(
 		ctx,
-		"POST",
+		http.MethodPost,
 		fmt.Sprintf("%s/api/runs/%s/fail", r.testerAddr, runID),
 		bytes.NewBuffer(jsonError),
 	)
@@ -342,7 +420,7 @@ func (r *Runner) completeRun(runID uuid.UUID) error {
 	defer cancel()
 	req, err := http.NewRequestWithContext(
 		ctx,
-		"POST",
+		http.MethodPost,
 		fmt.Sprintf("%s/api/runs/%s/complete", r.testerAddr, runID),
 		nil,
 	)
