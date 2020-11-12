@@ -61,6 +61,7 @@ type Run struct {
 	ID         uuid.UUID `json:"id"`
 	Package    string    `json:"package"`
 	Args       []string  `json:"args"`
+	Meta       RunMeta   `json:"meta"`
 	EnqueuedAt time.Time `json:"enqueued_at"`
 	StartedAt  time.Time `json:"started_at"`
 	FinishedAt time.Time `json:"finished_at"`
@@ -70,7 +71,7 @@ type Run struct {
 
 // RunMeta is additional metadata associated with the run.
 type RunMeta struct {
-	RunnerHostname string `json:"runner_hostname"`
+	Runner string `json:"runner"`
 }
 
 func (r *Run) Duration() time.Duration {

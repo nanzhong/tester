@@ -499,16 +499,18 @@ func (r *Runner) completeRun(runID uuid.UUID) error {
 }
 
 func (r *Runner) authAPIRequest(req *http.Request) {
-	if r.apiKey == "" {
-		return
-	}
-
 	// TODO make this configurable
 	name, err := os.Hostname()
 	// If getting hostname fails, use the generic "runner" name.
 	if err != nil {
 		name = "runner"
 	}
+	req.Header.Set("User-Agent", name)
+
+	if r.apiKey == "" {
+		return
+	}
+
 	req.SetBasicAuth(name, r.apiKey)
 }
 

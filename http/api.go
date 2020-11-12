@@ -190,7 +190,7 @@ func (h *APIHandler) claimRun(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if _, supported := supportedPackages[run.Package]; supported {
-			h.db.StartRun(r.Context(), run.ID)
+			h.db.StartRun(r.Context(), run.ID, r.Header.Get("User-Agent"))
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(run)
 			return

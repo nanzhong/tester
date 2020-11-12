@@ -197,12 +197,13 @@ func TestPG_StartRun(t *testing.T) {
 		err := pg.EnqueueRun(ctx, run)
 		require.NoError(t, err)
 
-		err = pg.StartRun(ctx, run.ID)
+		err = pg.StartRun(ctx, run.ID, "runner")
 		require.NoError(t, err)
 
 		getRun, err := pg.GetRun(ctx, run.ID)
 		require.NoError(t, err)
 		assert.NotEmpty(t, getRun.StartedAt)
+		assert.Equal(t, "runner", getRun.Meta.Runner)
 	})
 }
 
@@ -219,7 +220,7 @@ func TestPG_ResetRun(t *testing.T) {
 		err := pg.EnqueueRun(ctx, run)
 		require.NoError(t, err)
 
-		err = pg.StartRun(ctx, run.ID)
+		err = pg.StartRun(ctx, run.ID, "")
 		require.NoError(t, err)
 
 		err = pg.ResetRun(ctx, run.ID)
@@ -266,7 +267,7 @@ func TestPG_CompleteRun(t *testing.T) {
 		err := pg.EnqueueRun(ctx, run)
 		require.NoError(t, err)
 
-		err = pg.StartRun(ctx, run.ID)
+		err = pg.StartRun(ctx, run.ID, "")
 		require.NoError(t, err)
 
 		err = pg.CompleteRun(ctx, run.ID)
@@ -291,7 +292,7 @@ func TestPG_FailRun(t *testing.T) {
 		err := pg.EnqueueRun(ctx, run)
 		require.NoError(t, err)
 
-		err = pg.StartRun(ctx, run.ID)
+		err = pg.StartRun(ctx, run.ID, "")
 		require.NoError(t, err)
 
 		err = pg.FailRun(ctx, run.ID, "error")
@@ -327,7 +328,7 @@ func TestPG_ListRuns(t *testing.T) {
 			err := pg.EnqueueRun(ctx, r)
 			require.NoError(t, err)
 
-			err = pg.StartRun(ctx, r.ID)
+			err = pg.StartRun(ctx, r.ID, "")
 			require.NoError(t, err)
 		}
 

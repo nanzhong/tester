@@ -23,7 +23,7 @@ type DB interface {
 	ListTestsForPackageInRange(ctx context.Context, pkg string, begin, end time.Time) ([]*tester.Test, error)
 
 	EnqueueRun(ctx context.Context, run *tester.Run) error
-	StartRun(ctx context.Context, id uuid.UUID) error
+	StartRun(ctx context.Context, id uuid.UUID, runner string) error
 	ResetRun(ctx context.Context, id uuid.UUID) error
 	DeleteRun(ctx context.Context, id uuid.UUID) error
 	CompleteRun(ctx context.Context, id uuid.UUID) error
