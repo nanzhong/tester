@@ -347,9 +347,6 @@ func TestPG_ListRuns(t *testing.T) {
 
 		t.Run("ListPendingRuns", func(t *testing.T) {
 			runs, err := pg.ListPendingRuns(ctx)
-			for _, r := range runs {
-				fmt.Printf("%#v\n", r)
-			}
 			require.NoError(t, err)
 			assert.ElementsMatch(t, []*tester.Run{runPending}, runs)
 		})
