@@ -2,7 +2,7 @@
   "packages": [
     {
       "name": "db",
-      "path": "db.test",
+      "path": "/bin/db.test",
       "options": [
         {
           "name": "test.timeout",
@@ -13,7 +13,7 @@
     },
     {
       "name": "example",
-      "path": "example.test",
+      "path": "/bin/example.test",
       "options": [
         {
           "name": "test.timeout",

@@ -23,13 +23,14 @@ type APIHandler struct {
 	http.Handler
 
 	db           db.DB
+	packages     map[string]tester.Package
 	alertManager *alerting.AlertManager
 	slackApp     *slack.App
 	apiKey       string
 }
 
 // NewAPIHandler constructs a new `APIHandler`.
-func NewAPIHandler(db db.DB, opts ...Option) *APIHandler {
+func NewAPIHandler(db db.DB, packages []tester.Package, opts ...Option) *APIHandler {
 	defOpts := &options{
 		alertManager: &alerting.AlertManager{},
 	}
@@ -40,9 +41,14 @@ func NewAPIHandler(db db.DB, opts ...Option) *APIHandler {
 
 	handler := &APIHandler{
 		db:           db,
+		packages:     make(map[string]tester.Package),
 		alertManager: defOpts.alertManager,
 		slackApp:     defOpts.slackApp,
 		apiKey:       defOpts.apiKey,
+	}
+
+	for _, pkg := range packages {
+		handler.packages[pkg.Name] = pkg
 	}
 
 	r := mux.NewRouter()
@@ -61,6 +67,8 @@ func NewAPIHandler(db db.DB, opts ...Option) *APIHandler {
 	ar.HandleFunc("/runs/claim", LogHandlerFunc(handler.claimRun)).Methods(http.MethodPost)
 	ar.HandleFunc("/runs/{run_id}/complete", LogHandlerFunc(handler.completeRun)).Methods(http.MethodPost)
 	ar.HandleFunc("/runs/{run_id}/fail", LogHandlerFunc(handler.failRun)).Methods(http.MethodPost)
+	ar.HandleFunc("/packages/{package_name}", LogHandlerFunc(handler.getPackage)).Methods(http.MethodGet)
+	ar.HandleFunc("/packages/{package_name}/download", LogHandlerFunc(handler.downloadPackage)).Methods(http.MethodGet)
 
 	handler.Handler = r
 
@@ -247,6 +255,29 @@ func (h *APIHandler) failRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *APIHandler) getPackage(w http.ResponseWriter, r *http.Request) {
+	pkgName := mux.Vars(r)["package_name"]
+	pkg, ok := h.packages[pkgName]
+	if !ok {
+		renderAPIError(w, http.StatusNotFound, fmt.Errorf("package %s not found", pkgName))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(&pkg)
+}
+
+func (h *APIHandler) downloadPackage(w http.ResponseWriter, r *http.Request) {
+	pkgName := mux.Vars(r)["package_name"]
+	pkg, ok := h.packages[pkgName]
+	if !ok {
+		renderAPIError(w, http.StatusNotFound, fmt.Errorf("package %s not found", pkgName))
+		return
+	}
+
+	http.ServeFile(w, r, pkg.Path)
 }
 
 func (h *APIHandler) ensureAuth(next http.Handler) http.Handler {

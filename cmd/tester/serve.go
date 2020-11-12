@@ -106,7 +106,7 @@ var serveCmd = &cobra.Command{
 		}
 
 		uiHandler := testerhttp.NewUIHandler(dbStore, cfg.Packages)
-		apiHandler := testerhttp.NewAPIHandler(dbStore, httpOpts...)
+		apiHandler := testerhttp.NewAPIHandler(dbStore, cfg.Packages, httpOpts...)
 
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())
