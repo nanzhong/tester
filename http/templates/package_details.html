@@ -107,7 +107,10 @@
                   if (!el || el.length === 0) {
                     return
                   }
-                  var data = e.chart.data.datasets[el[0].datasetIndex].data[el[0].index];
+                  // TODO(nan) there seems to be a bug where incorrect datasets can also be included.
+                  // The last el in the array seems to be for the correct dataset though.
+                  var clickedEl = el[el.length - 1];
+                  var data = e.chart.data.datasets[clickedEl.datasetIndex].data[clickedEl.index];
                   var testID = data.id;
                   location.href = "/tests/" + testID;
                 },
