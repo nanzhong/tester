@@ -12,6 +12,7 @@ A live example of the latest version of this tooling can be found at https://tes
 
 *** Server
 The server provides the bulk of the functionality. It is responsible for:
+- configuration of tests
 - scheduling test runs
 - serving the HTTP user interface 
 - providing the HTTP based API that the runners use
@@ -21,6 +22,8 @@ All the test run data is stored in a postgresql database.
 
 *** Runner
 The runner is responsible for running the tests themselves. It coordinates what tests to run by interacting with the API provided by the server.
+
+The only configuration needed by a runner by default is what is required to communicate with the server. It can retrieve test configuration and binaries from the server or run tests using existing test binaries available in its environment.
 
 *** Configuration
 A common configuration format is shared between the server and runners. 
@@ -42,7 +45,7 @@ Format:
       // name of test package
       "name": "pkg",
       // path to the test binary for the package
-      "path": "pkg.test",
+      "path": "/opt/tester/bin/pkg.test",
       // test binary options that are supported      
       "options": [
         {
@@ -118,8 +121,12 @@ A runner can be started with
 
 #+BEGIN_SRC sh
 ~ tester run \
-  --api-key secret-key                     `# symmetric key for API auth ` \
-  --config ./path/to/config                `# path to configuration file` \
+  --tester-addr http://127.0.0.18080 `# address where the tester server is listening` \
+  --api-key secret-key               `# symmetric key for API auth ` \
+  --test-bins-path /path/to/bins     `# path test binaries are expected to be at and downloaded to` \
+  --local-test-bins-only             `# wheter or not to disable downloading test binaries from the server` \
+  --packages-include pkg1,pkg2       `# list of package to consider when claiming runs from the server` \
+  --packages-exclude pkg1,pkg2       `# list of package to exclude when claiming runs from the server (has priority over include list)` \
 #+END_SRC
 
-/Note/ that multiple runner can be used to increase throughput. Each runner can also be configured with different sets of packages.
+/Note/ that multiple runner can be used to increase throughput.
