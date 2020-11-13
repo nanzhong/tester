@@ -158,23 +158,36 @@ func (h *APIHandler) getTest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&test)
 }
 
+type ClaimRunRequest struct {
+	PackageWhitelist []string `json:"package_whitelist"`
+	PackageBlacklist []string `json:"package_blacklist"`
+}
+
 func (h *APIHandler) claimRun(w http.ResponseWriter, r *http.Request) {
-	var packages []string
-	err := json.NewDecoder(r.Body).Decode(&packages)
+	var claimRunRequest ClaimRunRequest
+	err := json.NewDecoder(r.Body).Decode(&claimRunRequest)
 	if err != nil {
-		log.Printf("failed to parse claim request: %s", err)
+		log.Printf("failed to parse claim run request: %s", err)
 		renderAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	if len(packages) == 0 {
+	var packages []string
+	if len(claimRunRequest.PackageWhitelist) == 0 {
 		for _, pkg := range h.packages {
 			packages = append(packages, pkg.Name)
 		}
+	} else {
+		packages = claimRunRequest.PackageWhitelist
 	}
 	supportedPackages := make(map[string]struct{})
 	for _, pkg := range packages {
 		supportedPackages[pkg] = struct{}{}
+	}
+
+	unsupportedPackages := make(map[string]struct{})
+	for _, pkg := range claimRunRequest.PackageBlacklist {
+		unsupportedPackages[pkg] = struct{}{}
 	}
 
 	runs, err := h.db.ListPendingRuns(r.Context())
@@ -186,6 +199,10 @@ func (h *APIHandler) claimRun(w http.ResponseWriter, r *http.Request) {
 
 	for _, run := range runs {
 		if !run.StartedAt.IsZero() {
+			continue
+		}
+
+		if _, unsupported := unsupportedPackages[run.Package]; unsupported {
 			continue
 		}
 
@@ -308,8 +325,4 @@ func renderAPIError(w http.ResponseWriter, status int, err error) {
 type apiError struct {
 	Status int    `json:"status"`
 	Error  string `json:"error"`
-}
-
-type claimRunRequest struct {
-	Packages []string `json:"packages"`
 }

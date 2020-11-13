@@ -28,6 +28,12 @@ var runCmd = &cobra.Command{
 		if localTestBinsOnly := viper.GetBool("run-local-test-bins-only"); localTestBinsOnly {
 			opts = append(opts, runner.WithLocalTestBinsOnly())
 		}
+		if packageWhitelist := viper.GetStringSlice("run-packages-include"); len(packageWhitelist) > 0 {
+			opts = append(opts, runner.WithPackageWhitelist(packageWhitelist))
+		}
+		if packageBlacklist := viper.GetStringSlice("run-packages-exclude"); len(packageBlacklist) > 0 {
+			opts = append(opts, runner.WithPackageBlacklist(packageBlacklist))
+		}
 
 		runner, err := runner.New(opts...)
 		if err != nil {
@@ -69,4 +75,10 @@ func init() {
 
 	runCmd.Flags().Bool("local-test-bins-only", false, "Disables downloading remote test binaries")
 	viper.BindPFlag("run-local-test-bins-only", runCmd.Flags().Lookup("local-test-bins-only"))
+
+	runCmd.Flags().StringSlice("packages-include", nil, "Whitelist of packages to include for claiming")
+	viper.BindPFlag("run-packages-include", runCmd.Flags().Lookup("packages-include"))
+
+	runCmd.Flags().StringSlice("packages-exclude", nil, "Blacklist of packages to exclude for claiming")
+	viper.BindPFlag("run-packages-exclude", runCmd.Flags().Lookup("packages-exclude"))
 }
