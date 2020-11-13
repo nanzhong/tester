@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nanzhong/tester"
+	testerhttp "github.com/nanzhong/tester/http"
 )
 
 var (
@@ -62,10 +63,17 @@ func WithAPIKey(key string) Option {
 	}
 }
 
-// WithPackages allows configuring packages to run.
-func WithPackages(pkgs []string) Option {
+// WithPackageWhitelist allows configuring packages to claim.
+func WithPackageWhitelist(pkgs []string) Option {
 	return func(runner *Runner) {
-		runner.packages = pkgs
+		runner.packageWhitelist = pkgs
+	}
+}
+
+// WithPackageBlacklist allows configuring packages to avoid claiming.
+func WithPackageBlacklist(pkgs []string) Option {
+	return func(runner *Runner) {
+		runner.packageBlacklist = pkgs
 	}
 }
 
@@ -87,7 +95,8 @@ func WithLocalTestBinsOnly() Option {
 type Runner struct {
 	testerAddr        string
 	apiKey            string
-	packages          []string
+	packageWhitelist  []string
+	packageBlacklist  []string
 	testBinsPath      string
 	localTestBinsOnly bool
 
@@ -251,9 +260,14 @@ func (r *Runner) verifyLocalTestBinary(ctx context.Context, pkg *tester.Package)
 }
 
 func (r *Runner) claimRun(ctx context.Context) (*tester.Run, error) {
-	body, err := json.Marshal(r.packages)
+	claimReq := testerhttp.ClaimRunRequest{
+		PackageWhitelist: r.packageWhitelist,
+		PackageBlacklist: r.packageBlacklist,
+	}
+
+	body, err := json.Marshal(&claimReq)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling claim request to json: %w", err)
+		return nil, fmt.Errorf("marshaling claim run request to json: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(
