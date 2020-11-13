@@ -130,3 +130,13 @@ A runner can be started with
 #+END_SRC
 
 /Note/ that multiple runner can be used to increase throughput.
+
+** TODO
+There's some strong irony here that the test tooling isn't well tested.
+
+[[https://github.com/nanzhong/tester][nanzhong/tester]] started as part of a hackathon project and as a result a lot of tradeoffs where made. The general direction and approach has shifted a number of times and adding better test coverage in a time of flux was not a priority. Having said that, direction and approach are much more stable now, and improving test coverage and stability is now a priority.
+
+There's still quite a lot to do before a first /"official release"/ and the following are the priorities
+- [ ] improve test coverage
+- [ ] cleanup runner implementation (eg. abstract out parsing test output from the running of the tests)
+- [ ] export prometheus metrics
