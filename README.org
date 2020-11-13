@@ -99,21 +99,21 @@ The server can be started with
 There are two slack integrations that are supported. The first is alerting in slack channels on failed test runs, the second is setting up a custom slack command that can be used to trigger test runs.
 
 Both of these require creating and setting up a slack application and the configuring the following server flags:
-#+BEGIN_SRC
---slack-access-token string     Slack app access token
---slack-signing-secret string   Slack signing secret
+#+BEGIN_SRC sh
+--slack-access-token string    `# Slack app access token` \
+--slack-signing-secret string  `# Slack signing secret`
 #+END_SRC
 
 **** Okta authentication
 If the reporting UI requires authentication, okta oauth is supported.
 
 These additional server flags need to be configured:
-#+BEGIN_SRC
---okta-client-id string         Okta client ID
---okta-client-secret string     Okta client secret
---okta-issuer string            Okta issuer
---okta-redirect-uri string      Okta redirect URI
---okta-session-key string       Okta session key
+#+BEGIN_SRC sh
+--okta-client-id string      `# Okta client ID` \
+--okta-client-secret string  `# Okta client secret` \
+--okta-issuer string         `# Okta issuer` \
+--okta-redirect-uri string   `# Okta redirect URI` \
+--okta-session-key string    `# Okta session key`
 #+END_SRC
 
 *** Runner
@@ -121,12 +121,22 @@ A runner can be started with
 
 #+BEGIN_SRC sh
 ~ tester run \
-  --tester-addr http://127.0.0.18080 `# address where the tester server is listening` \
-  --api-key secret-key               `# symmetric key for API auth ` \
-  --test-bins-path /path/to/bins     `# path test binaries are expected to be at and downloaded to` \
-  --local-test-bins-only             `# wheter or not to disable downloading test binaries from the server` \
-  --packages-include pkg1,pkg2       `# list of package to consider when claiming runs from the server` \
-  --packages-exclude pkg1,pkg2       `# list of package to exclude when claiming runs from the server (has priority over include list)` \
+  --tester-addr http://127.0.0.18080  `# address where the tester server is listening` \
+  --api-key secret-key                `# symmetric key for API auth ` \
+  --test-bins-path /path/to/bins      `# path test binaries are expected to be at and downloaded to` \
+  --local-test-bins-only              `# wheter or not to disable downloading test binaries from the server` \
+  --packages-include pkg1,pkg2        `# list of package to consider when claiming runs from the server` \
+  --packages-exclude pkg1,pkg2        `# list of package to exclude when claiming runs from the server (has priority over include list)` 
 #+END_SRC
 
 /Note/ that multiple runner can be used to increase throughput.
+
+** TODO
+There's some strong irony here that the test tooling isn't well tested.
+
+[[https://github.com/nanzhong/tester][nanzhong/tester]] started as part of a hackathon project and as a result a lot of tradeoffs where made. The general direction and approach has shifted a number of times and adding better test coverage in a time of flux was not a priority. Having said that, direction and approach are much more stable now, and improving test coverage and stability is now a priority.
+
+There's still quite a lot to do before a first /"official release"/ and the following are the priorities
+- [ ] improve test coverage
+- [ ] cleanup runner implementation (eg. abstract out parsing test output from the running of the tests)
+- [ ] export prometheus metrics
