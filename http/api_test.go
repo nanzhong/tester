@@ -411,3 +411,52 @@ func TestClaimRun(t *testing.T) {
 		})
 	})
 }
+
+func TestCompleteRun(t *testing.T) {
+	t.Run("api auth", func(t *testing.T) {
+		assertAPIAuth(t, http.MethodPost, fmt.Sprintf("/api/runs/%s/complete", uuid.New()), nil)
+	})
+
+	t.Run("already finished run", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			now := time.Now().UTC().Round(time.Second)
+			run := &tester.Run{
+				ID:         uuid.New(),
+				FinishedAt: now,
+			}
+			mockDB.EXPECT().GetRun(gomock.Any(), gomock.Eq(run.ID)).Return(run, nil)
+
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/runs/%s/complete", ts.URL, run.ID), nil)
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		})
+	})
+
+	t.Run("happy path", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			run := &tester.Run{
+				ID: uuid.New(),
+			}
+			mockDB.EXPECT().GetRun(gomock.Any(), gomock.Eq(run.ID)).Return(run, nil)
+			mockDB.EXPECT().CompleteRun(gomock.Any(), gomock.Eq(run.ID)).Return(nil)
+
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/runs/%s/complete", ts.URL, run.ID), nil)
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+		})
+	})
+}
