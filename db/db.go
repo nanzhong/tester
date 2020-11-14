@@ -12,6 +12,8 @@ import (
 // ErrNotFound is returned when the requested item could not be found.
 var ErrNotFound = errors.New("not found")
 
+//go:generate mockgen -package=db -destination=db_mock.go . DB
+
 // DB is the interface for a persistence store implementation.
 type DB interface {
 	Init(ctx context.Context) error

@@ -83,7 +83,7 @@ func (h *APIHandler) submitTest(w http.ResponseWriter, r *http.Request) {
 	var test tester.Test
 	err := json.NewDecoder(r.Body).Decode(&test)
 	if err != nil {
-		renderAPIError(w, 400, fmt.Errorf("decoding json: %w", err))
+		renderAPIError(w, http.StatusBadRequest, fmt.Errorf("decoding json: %w", err))
 		return
 	}
 
