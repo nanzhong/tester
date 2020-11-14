@@ -2,11 +2,14 @@ package http
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -518,6 +521,131 @@ func TestFailRun(t *testing.T) {
 			defer resp.Body.Close()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
+		})
+	})
+}
+
+func TestGetPackage(t *testing.T) {
+	t.Run("api auth", func(t *testing.T) {
+		assertAPIAuth(t, http.MethodGet, "/api/packages/pkg", nil)
+	})
+
+	t.Run("package not found", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/packages/pkg", ts.URL), nil)
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		})
+	})
+
+	t.Run("happy path", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			pkg := &tester.Package{
+				Name:      "pkg",
+				Path:      "testdata/fake_test_bin",
+				SHA256Sum: "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78",
+				RunDelay:  5,
+				Options: []tester.Option{{
+					Name:        "timeout",
+					Description: "timeout",
+					Default:     "5m",
+				}},
+			}
+
+			api.packages = map[string]*tester.Package{
+				"pkg": pkg,
+			}
+
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/packages/%s", ts.URL, pkg.Name), nil)
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			var respPackage tester.Package
+			err = json.NewDecoder(resp.Body).Decode(&respPackage)
+			assert.DeepEqual(t, pkg, &respPackage)
+		})
+	})
+}
+
+func TestDownloadPackage(t *testing.T) {
+	t.Run("api auth", func(t *testing.T) {
+		assertAPIAuth(t, http.MethodGet, "/api/packages/pkg/download", nil)
+	})
+
+	t.Run("package not found", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/packages/pkg/download", ts.URL), nil)
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		})
+	})
+
+	t.Run("happy path", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			fakeTestBinPath := "testdata/fake_test_bin"
+			fakeTestBinSHA256Sum := "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78"
+			pkg := &tester.Package{
+				Name:      "pkg",
+				Path:      fakeTestBinPath,
+				SHA256Sum: fakeTestBinSHA256Sum,
+				RunDelay:  5,
+				Options: []tester.Option{{
+					Name:        "timeout",
+					Description: "timeout",
+					Default:     "5m",
+				}},
+			}
+
+			api.packages = map[string]*tester.Package{
+				"pkg": pkg,
+			}
+
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/packages/%s/download", ts.URL, pkg.Name), nil)
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			hash := sha256.New()
+			respBuf := bytes.NewBuffer(nil)
+			mw := io.MultiWriter(respBuf, hash)
+			io.Copy(mw, resp.Body)
+
+			f, err := os.Open(fakeTestBinPath)
+			require.NoError(t, err)
+			defer f.Close()
+
+			fBytes, err := ioutil.ReadAll(f)
+			require.NoError(t, err)
+
+			assert.DeepEqual(t, fBytes, respBuf.Bytes())
+			assert.DeepEqual(t, fakeTestBinSHA256Sum, fmt.Sprintf("%x", hash.Sum(nil)))
 		})
 	})
 }
