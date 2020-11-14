@@ -141,3 +141,51 @@ func TestSubmitTest(t *testing.T) {
 		})
 	})
 }
+
+func TestListTests(t *testing.T) {
+	t.Run("api auth", func(t *testing.T) {
+		assertAPIAuth(t, http.MethodGet, "/api/tests", nil)
+	})
+
+	t.Run("happy path", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			now := time.Now()
+			tests := []*tester.Test{{
+				ID:      uuid.New(),
+				Package: "pkg",
+				RunID:   uuid.New(),
+				Result: &tester.T{
+					TB: tester.TB{
+						Name:       "TestA",
+						StartedAt:  now,
+						FinishedAt: now,
+						State:      tester.TBStatePassed,
+					},
+				},
+				Logs: []tester.TBLog{{
+					Time:   now,
+					Name:   "TestA",
+					Output: []byte("output"),
+				}},
+			}}
+
+			mockDB.EXPECT().ListTests(gomock.Any(), 0).Return(tests, nil)
+
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/tests", ts.URL), nil)
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			var respTests []*tester.Test
+			err = json.NewDecoder(resp.Body).Decode(&respTests)
+			require.NoError(t, err)
+			assert.DeepEqual(t, tests, respTests)
+		})
+	})
+}
