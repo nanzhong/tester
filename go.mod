@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/Masterminds/squirrel v1.4.0
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
+	github.com/golang/mock v1.4.4
 	github.com/google/go-cmp v0.5.2
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.3
@@ -27,6 +28,7 @@ require (
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899 // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
+	gotest.tools v2.2.0+incompatible
 )
 
 replace github.com/nlopes/slack => github.com/nanzhong/slack v0.6.1-0.20200118044918-a49464de8ae8

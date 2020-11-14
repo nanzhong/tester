@@ -131,7 +131,7 @@ A runner can be started with
 
 /Note/ that multiple runner can be used to increase throughput.
 
-** TODO
+** Next Steps
 There's some strong irony here that the test tooling isn't well tested.
 
 [[https://github.com/nanzhong/tester][nanzhong/tester]] started as part of a hackathon project and as a result a lot of tradeoffs where made. The general direction and approach has shifted a number of times and adding better test coverage in a time of flux was not a priority. Having said that, direction and approach are much more stable now, and improving test coverage and stability is now a priority.

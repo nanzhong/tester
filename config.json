@@ -10,6 +10,17 @@
           "default": "1m"
         }
       ]
+    },
+    {
+      "name": "http",
+      "path": "/bin/http.test",
+      "options": [
+        {
+          "name": "test.timeout",
+          "description": "Maximum time tests can run for",
+          "default": "1m"
+        }
+      ]
     }
   ],
   "scheduler": {
