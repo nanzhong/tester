@@ -74,7 +74,7 @@ func TestSubmitTest(t *testing.T) {
 
 	t.Run("already finished run", func(t *testing.T) {
 		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
-			now := time.Now().Round(time.Second)
+			now := time.Now().UTC().Round(time.Second)
 			test := &tester.Test{
 				RunID: uuid.New(),
 			}
@@ -98,7 +98,7 @@ func TestSubmitTest(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
-			now := time.Now().Round(time.Second)
+			now := time.Now().UTC().Round(time.Second)
 			test := &tester.Test{
 				ID:      uuid.New(),
 				Package: "pkg",
@@ -149,7 +149,7 @@ func TestListTests(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
-			now := time.Now()
+			now := time.Now().UTC().Round(time.Second)
 			tests := []*tester.Test{{
 				ID:      uuid.New(),
 				Package: "pkg",
