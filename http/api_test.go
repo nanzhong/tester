@@ -18,7 +18,10 @@ import (
 	"gotest.tools/assert"
 )
 
-const testKey = "key"
+const (
+	testKey       = "key"
+	testUserAgent = "tester/test"
+)
 
 func withAPIHandler(t *testing.T, fn func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB)) {
 	ctrl := gomock.NewController(t)
@@ -47,7 +50,8 @@ func assertAPIAuth(t *testing.T, method, path string, body io.Reader) {
 	})
 }
 func addAuth(r *http.Request) {
-	r.SetBasicAuth("", testKey)
+	r.SetBasicAuth(testUserAgent, testKey)
+	r.Header.Set("User-Agent", testUserAgent)
 }
 
 func TestSubmitTest(t *testing.T) {
@@ -252,6 +256,158 @@ func TestGetTest(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&respTest)
 			require.NoError(t, err)
 			assert.DeepEqual(t, test, &respTest)
+		})
+	})
+}
+
+func TestClaimRun(t *testing.T) {
+	t.Run("api auth", func(t *testing.T) {
+		req := ClaimRunRequest{
+			PackageWhitelist: []string{},
+			PackageBlacklist: []string{},
+		}
+		reqBody, err := json.Marshal(&req)
+		require.NoError(t, err)
+
+		assertAPIAuth(t, http.MethodPost, "/api/runs/claim", bytes.NewBuffer(reqBody))
+	})
+
+	t.Run("happy path - no whitelist", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			api.packages = map[string]*tester.Package{"pkg": {
+				Name: "pkg",
+			}}
+
+			now := time.Now().UTC().Round(time.Second)
+			run := &tester.Run{
+				ID:         uuid.New(),
+				Package:    "pkg",
+				EnqueuedAt: now,
+			}
+
+			mockDB.EXPECT().ListPendingRuns(gomock.Any()).Return([]*tester.Run{run}, nil)
+			mockDB.EXPECT().StartRun(gomock.Any(), run.ID, testUserAgent).Return(nil)
+
+			claimReq := ClaimRunRequest{
+				PackageWhitelist: []string{},
+				PackageBlacklist: []string{},
+			}
+			reqBody, err := json.Marshal(&claimReq)
+			require.NoError(t, err)
+
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/runs/claim", ts.URL), bytes.NewBuffer(reqBody))
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			var respRun tester.Run
+			err = json.NewDecoder(resp.Body).Decode(&respRun)
+			require.NoError(t, err)
+			assert.DeepEqual(t, run, &respRun)
+		})
+	})
+
+	t.Run("happy path - whitelist", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			api.packages = map[string]*tester.Package{
+				"pkg1": {Name: "pkg1"},
+				"pkg2": {Name: "pkg2"},
+			}
+
+			now := time.Now().UTC().Round(time.Second)
+			runs := []*tester.Run{
+				{
+					ID:         uuid.New(),
+					Package:    "pkg1",
+					EnqueuedAt: now,
+				},
+				{
+					ID:         uuid.New(),
+					Package:    "pkg2",
+					EnqueuedAt: now,
+				},
+			}
+
+			mockDB.EXPECT().ListPendingRuns(gomock.Any()).Return(runs, nil)
+			mockDB.EXPECT().StartRun(gomock.Any(), runs[1].ID, testUserAgent).Return(nil)
+
+			claimReq := ClaimRunRequest{
+				PackageWhitelist: []string{"pkg2"},
+				PackageBlacklist: []string{},
+			}
+			reqBody, err := json.Marshal(&claimReq)
+			require.NoError(t, err)
+
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/runs/claim", ts.URL), bytes.NewBuffer(reqBody))
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			var respRun tester.Run
+			err = json.NewDecoder(resp.Body).Decode(&respRun)
+			require.NoError(t, err)
+			assert.DeepEqual(t, runs[1], &respRun)
+		})
+	})
+
+	t.Run("happy path - blacklist", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			api.packages = map[string]*tester.Package{
+				"pkg1": {Name: "pkg1"},
+				"pkg2": {Name: "pkg2"},
+			}
+
+			now := time.Now().UTC().Round(time.Second)
+			runs := []*tester.Run{
+				{
+					ID:         uuid.New(),
+					Package:    "pkg1",
+					EnqueuedAt: now,
+				},
+				{
+					ID:         uuid.New(),
+					Package:    "pkg2",
+					EnqueuedAt: now,
+				},
+			}
+
+			mockDB.EXPECT().ListPendingRuns(gomock.Any()).Return(runs, nil)
+			mockDB.EXPECT().StartRun(gomock.Any(), runs[1].ID, testUserAgent).Return(nil)
+
+			claimReq := ClaimRunRequest{
+				PackageWhitelist: []string{"pkg1", "pkg2"},
+				PackageBlacklist: []string{"pkg1"},
+			}
+			reqBody, err := json.Marshal(&claimReq)
+			require.NoError(t, err)
+
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/runs/claim", ts.URL), bytes.NewBuffer(reqBody))
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			var respRun tester.Run
+			err = json.NewDecoder(resp.Body).Decode(&respRun)
+			require.NoError(t, err)
+			assert.DeepEqual(t, runs[1], &respRun)
 		})
 	})
 }
