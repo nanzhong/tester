@@ -126,7 +126,7 @@ func TestSubmitTest(t *testing.T) {
 			addAuth(req)
 
 			mockDB.EXPECT().GetRun(gomock.Any(), test.RunID).Return(&tester.Run{}, nil)
-			mockDB.EXPECT().AddTest(gomock.Any(), test).Return(nil)
+			mockDB.EXPECT().AddTest(gomock.Any(), gomock.Eq(test)).Return(nil)
 
 			resp, err := ts.Client().Do(req)
 			require.NoError(t, err)
