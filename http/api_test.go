@@ -460,3 +460,64 @@ func TestCompleteRun(t *testing.T) {
 		})
 	})
 }
+
+func TestFailRun(t *testing.T) {
+	t.Run("api auth", func(t *testing.T) {
+		errorMsg := "error"
+		reqBody, err := json.Marshal(&errorMsg)
+		require.NoError(t, err)
+
+		assertAPIAuth(t, http.MethodPost, fmt.Sprintf("/api/runs/%s/fail", uuid.New()), bytes.NewBuffer(reqBody))
+	})
+
+	t.Run("already finished run", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			now := time.Now().UTC().Round(time.Second)
+			run := &tester.Run{
+				ID:         uuid.New(),
+				FinishedAt: now,
+			}
+			mockDB.EXPECT().GetRun(gomock.Any(), gomock.Eq(run.ID)).Return(run, nil)
+
+			errorMsg := "error"
+			reqBody, err := json.Marshal(&errorMsg)
+			require.NoError(t, err)
+
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/runs/%s/fail", ts.URL, run.ID), bytes.NewBuffer(reqBody))
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		})
+	})
+
+	t.Run("happy path", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			errorMsg := "error"
+			run := &tester.Run{
+				ID: uuid.New(),
+			}
+			mockDB.EXPECT().GetRun(gomock.Any(), gomock.Eq(run.ID)).Return(run, nil)
+			mockDB.EXPECT().FailRun(gomock.Any(), gomock.Eq(run.ID), gomock.Eq(errorMsg)).Return(nil)
+
+			reqBody, err := json.Marshal(&errorMsg)
+			require.NoError(t, err)
+
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/runs/%s/fail", ts.URL, run.ID), bytes.NewBuffer(reqBody))
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+		})
+	})
+}
