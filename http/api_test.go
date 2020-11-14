@@ -189,3 +189,69 @@ func TestListTests(t *testing.T) {
 		})
 	})
 }
+
+func TestGetTest(t *testing.T) {
+	t.Run("api auth", func(t *testing.T) {
+		assertAPIAuth(t, http.MethodGet, fmt.Sprintf("/api/tests/%s", uuid.New()), nil)
+	})
+
+	t.Run("test not found", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			missingID := uuid.New()
+			mockDB.EXPECT().GetTest(gomock.Any(), gomock.Eq(missingID)).Return(nil, db.ErrNotFound)
+
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/tests/%s", ts.URL, missingID), nil)
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		})
+	})
+
+	t.Run("happy path", func(t *testing.T) {
+		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
+			now := time.Now().UTC().Round(time.Second)
+			test := &tester.Test{
+				ID:      uuid.New(),
+				Package: "pkg",
+				RunID:   uuid.New(),
+				Result: &tester.T{
+					TB: tester.TB{
+						Name:       "TestA",
+						StartedAt:  now,
+						FinishedAt: now,
+						State:      tester.TBStatePassed,
+					},
+				},
+				Logs: []tester.TBLog{{
+					Time:   now,
+					Name:   "TestA",
+					Output: []byte("output"),
+				}},
+			}
+
+			mockDB.EXPECT().GetTest(gomock.Any(), test.ID).Return(test, nil)
+
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/tests/%s", ts.URL, test.ID), nil)
+			require.NoError(t, err)
+
+			addAuth(req)
+
+			resp, err := ts.Client().Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			var respTest tester.Test
+			err = json.NewDecoder(resp.Body).Decode(&respTest)
+			require.NoError(t, err)
+			assert.DeepEqual(t, test, &respTest)
+		})
+	})
+}
