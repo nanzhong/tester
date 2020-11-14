@@ -29,6 +29,6 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Test
-      run: go test -v ./...
+      run: go test -v -race -cover ./...
       env:
         PG_DSN: 'postgresql://user:password@localhost:5432/tester'
