@@ -220,7 +220,7 @@ func TestPG_ResetRun(t *testing.T) {
 		err := pg.EnqueueRun(ctx, run)
 		require.NoError(t, err)
 
-		err = pg.StartRun(ctx, run.ID, "")
+		err = pg.StartRun(ctx, run.ID, "runner")
 		require.NoError(t, err)
 
 		err = pg.ResetRun(ctx, run.ID)
@@ -229,6 +229,7 @@ func TestPG_ResetRun(t *testing.T) {
 		getRun, err := pg.GetRun(ctx, run.ID)
 		require.NoError(t, err)
 		assert.Empty(t, getRun.StartedAt)
+		assert.Equal(t, "", getRun.Meta.Runner)
 	})
 }
 
