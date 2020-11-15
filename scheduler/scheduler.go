@@ -35,7 +35,7 @@ func WithRunTimeout(d time.Duration) Option {
 
 // Scheduler schedules runs.
 type Scheduler struct {
-	packages map[string]*tester.Package
+	Packages map[string]*tester.Package
 
 	stop            chan struct{}
 	lastScheduledAt map[string]time.Time
@@ -48,14 +48,14 @@ type Scheduler struct {
 func NewScheduler(db db.DB, packages []*tester.Package, opts ...Option) *Scheduler {
 	scheduler := &Scheduler{
 		db:              db,
-		packages:        make(map[string]*tester.Package),
+		Packages:        make(map[string]*tester.Package),
 		lastScheduledAt: make(map[string]time.Time),
 		stop:            make(chan struct{}),
 		runDelay:        5 * time.Minute,
 		runTimeout:      15 * time.Minute,
 	}
 	for _, pkg := range packages {
-		scheduler.packages[pkg.Name] = pkg
+		scheduler.Packages[pkg.Name] = pkg
 	}
 
 	for _, opt := range opts {
@@ -66,7 +66,7 @@ func NewScheduler(db db.DB, packages []*tester.Package, opts ...Option) *Schedul
 }
 
 func (s *Scheduler) Schedule(ctx context.Context, packageName string, args ...string) (*tester.Run, error) {
-	pkg, exists := s.packages[packageName]
+	pkg, exists := s.Packages[packageName]
 	if !exists {
 		return nil, fmt.Errorf("unknown package: %s", packageName)
 	}
@@ -152,7 +152,7 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 		pendingRuns[run.Package] = run
 	}
 
-	for _, pkg := range s.packages {
+	for _, pkg := range s.Packages {
 		runDelay := s.runDelay
 		if pkg.RunDelay > 0 {
 			runDelay = pkg.RunDelay

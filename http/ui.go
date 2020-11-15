@@ -130,17 +130,17 @@ type dailyPackageRunSummary struct {
 }
 
 func (h *UIHandler) dashboard(w http.ResponseWriter, r *http.Request) {
-	packages, monthSummaries, daySummaries, hourSummaries, err := h.LoadSummaries(r.Context())
+	_, monthSummaries, daySummaries, hourSummaries, err := h.LoadSummaries(r.Context())
 	if err != nil {
 		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	dailyPackageRunSummaries := make([]*dailyPackageRunSummary, len(packages))
+	dailyPackageRunSummaries := make(map[string]*dailyPackageRunSummary)
 
-	for i, pkg := range packages {
-		dailyPackageRunSummaries[i] = &dailyPackageRunSummary{
-			Name:          pkg,
+	for _, pkg := range h.packages {
+		dailyPackageRunSummaries[pkg.Name] = &dailyPackageRunSummary{
+			Name:          pkg.Name,
 			HourSummaries: hourSummaries,
 			DaySummaries:  daySummaries,
 
@@ -150,9 +150,11 @@ func (h *UIHandler) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	value := &struct {
+		Packages                 []*tester.Package
 		OverallMonthlyRunSummary *monthlyRunSummary
-		DailyPackageRunSummaries []*dailyPackageRunSummary
+		DailyPackageRunSummaries map[string]*dailyPackageRunSummary
 	}{
+		Packages: h.packages,
 		OverallMonthlyRunSummary: &monthlyRunSummary{
 			HourSummaries:  hourSummaries,
 			DaySummaries:   daySummaries,

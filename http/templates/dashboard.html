@@ -13,16 +13,25 @@
 <div class="packages">
   <h1 class="h3">Results by Package  <small class="text-muted">(last 24h)</small></h1>
   <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3">
-    {{range .DailyPackageRunSummaries}}
+    {{ range .Packages }}
+    {{ $pkgSummary := index $.DailyPackageRunSummaries .Name }}
     <div class="col mb-2">
       <h2 class="h4"><a href="/packages/{{ .Name }}">{{ .Name }}</a></h2>
-      {{ template "package_run_summary_day" . }}
+      {{ if $pkgSummary }}
+      {{ template "package_run_summary_day" $pkgSummary }}
+      {{ else }}
+      <div class="border p-1">
+        <div class="d-flex" style="min-height: 100%;">
+          No results yet...
+        </div>
+      </div>
+      {{ end }}
     </div>
     {{else}}
     <div class="col">
       <h5>No results yet</h5>
       <p>Kick off a test run and publish the results...</p>
     </div>
-    {{end}}
+    {{ end }}
   </div>
 </div>
