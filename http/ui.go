@@ -170,17 +170,17 @@ func (h *UIHandler) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UIHandler) listPackages(w http.ResponseWriter, r *http.Request) {
-	packages, monthSummaries, daySummaries, hourSummaries, err := h.LoadSummaries(r.Context())
+	_, monthSummaries, daySummaries, hourSummaries, err := h.LoadSummaries(r.Context())
 	if err != nil {
 		h.RenderError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	monthlyPackageRunSummaries := make([]*monthlyPackageRunSummary, len(packages))
+	monthlyPackageRunSummaries := make([]*monthlyPackageRunSummary, len(h.packages))
 
-	for i, pkg := range packages {
+	for i, pkg := range h.packages {
 		monthlyPackageRunSummaries[i] = &monthlyPackageRunSummary{
-			Name:           pkg,
+			Name:           pkg.Name,
 			HourSummaries:  hourSummaries,
 			DaySummaries:   daySummaries,
 			MonthSummaries: monthSummaries,
