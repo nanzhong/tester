@@ -227,6 +227,7 @@ func (p *PG) ResetRun(ctx context.Context, id uuid.UUID) error {
 			"started_at":  sql.NullTime{},
 			"finished_at": sql.NullTime{},
 			"error":       sql.NullString{},
+			"meta":        tester.RunMeta{},
 		}).
 		Where("id = ?", id).
 		Where("finished_at IS NULL")
