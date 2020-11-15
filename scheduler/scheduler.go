@@ -15,32 +15,27 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type options struct {
-	runTimeout time.Duration
-	runDelay   time.Duration
-}
-
 // Option is used to inject dependencies into a Scheduler on creation.
-type Option func(*options)
+type Option func(*Scheduler)
 
 // WithRunDelay allows configuring a minimum delay between runs of a package.
 func WithRunDelay(d time.Duration) Option {
-	return func(opts *options) {
-		opts.runDelay = d
+	return func(s *Scheduler) {
+		s.runDelay = d
 	}
 }
 
 // WithRunTimeout allows configuring a maximum timeout before runs are deemed
 // stale and reset.
 func WithRunTimeout(d time.Duration) Option {
-	return func(opts *options) {
-		opts.runTimeout = d
+	return func(s *Scheduler) {
+		s.runTimeout = d
 	}
 }
 
 // Scheduler schedules runs.
 type Scheduler struct {
-	Packages []*tester.Package
+	packages map[string]*tester.Package
 
 	stop            chan struct{}
 	lastScheduledAt map[string]time.Time
@@ -51,34 +46,28 @@ type Scheduler struct {
 
 // NewScheduler constructs a new scheduler.
 func NewScheduler(db db.DB, packages []*tester.Package, opts ...Option) *Scheduler {
-	defOpts := &options{
-		runDelay:   5 * time.Minute,
-		runTimeout: 15 * time.Minute,
+	scheduler := &Scheduler{
+		db:              db,
+		packages:        make(map[string]*tester.Package),
+		lastScheduledAt: make(map[string]time.Time),
+		stop:            make(chan struct{}),
+		runDelay:        5 * time.Minute,
+		runTimeout:      15 * time.Minute,
+	}
+	for _, pkg := range packages {
+		scheduler.packages[pkg.Name] = pkg
 	}
 
 	for _, opt := range opts {
-		opt(defOpts)
+		opt(scheduler)
 	}
 
-	return &Scheduler{
-		stop:            make(chan struct{}),
-		db:              db,
-		runDelay:        defOpts.runDelay,
-		runTimeout:      defOpts.runTimeout,
-		lastScheduledAt: make(map[string]time.Time),
-		Packages:        packages,
-	}
+	return scheduler
 }
 
 func (s *Scheduler) Schedule(ctx context.Context, packageName string, args ...string) (*tester.Run, error) {
-	var pkg *tester.Package
-	for _, p := range s.Packages {
-		if p.Name == packageName {
-			pkg = p
-			break
-		}
-	}
-	if pkg == nil {
+	pkg, exists := s.packages[packageName]
+	if !exists {
 		return nil, fmt.Errorf("unknown package: %s", packageName)
 	}
 
@@ -163,13 +152,7 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 		pendingRuns[run.Package] = run
 	}
 
-	packagesToRun := make([]*tester.Package, len(s.Packages))
-	copy(packagesToRun, s.Packages)
-	rand.Shuffle(len(packagesToRun), func(i int, j int) {
-		packagesToRun[i], packagesToRun[j] = packagesToRun[j], packagesToRun[i]
-	})
-
-	for _, pkg := range packagesToRun {
+	for _, pkg := range s.packages {
 		runDelay := s.runDelay
 		if pkg.RunDelay > 0 {
 			runDelay = pkg.RunDelay
