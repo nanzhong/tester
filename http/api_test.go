@@ -603,8 +603,19 @@ func TestDownloadPackage(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		withAPIHandler(t, func(ts *httptest.Server, api *APIHandler, mockDB *db.MockDB) {
-			fakeTestBinPath := "testdata/fake_test_bin"
-			fakeTestBinSHA256Sum := "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78"
+			tmpDir := t.TempDir()
+			fakeTestBinData := []byte("fake")
+			fakeTestBinPath := fmt.Sprintf("%s/fake_test_bin", tmpDir)
+			fakeTestBinFile, err := os.Create(fakeTestBinPath)
+			require.NoError(t, err)
+			defer fakeTestBinFile.Close()
+
+			hash := sha256.New()
+			mw := io.MultiWriter(fakeTestBinFile, hash)
+			_, err = mw.Write(fakeTestBinData)
+			require.NoError(t, err)
+
+			fakeTestBinSHA256Sum := fmt.Sprintf("%x", hash.Sum(nil))
 			pkg := &tester.Package{
 				Name:      "pkg",
 				Path:      fakeTestBinPath,
@@ -632,9 +643,9 @@ func TestDownloadPackage(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-			hash := sha256.New()
+			hash = sha256.New()
 			respBuf := bytes.NewBuffer(nil)
-			mw := io.MultiWriter(respBuf, hash)
+			mw = io.MultiWriter(respBuf, hash)
 			io.Copy(mw, resp.Body)
 
 			f, err := os.Open(fakeTestBinPath)
