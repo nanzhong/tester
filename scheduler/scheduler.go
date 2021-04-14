@@ -154,8 +154,8 @@ func (s *Scheduler) scheduleRuns(ctx context.Context) error {
 
 	for _, pkg := range s.Packages {
 		runDelay := s.runDelay
-		if pkg.RunDelay > 0 {
-			runDelay = pkg.RunDelay
+		if pkg.RunDelay.Duration > 0 {
+			runDelay = pkg.RunDelay.Duration
 		}
 		if _, exists := pendingRuns[pkg.Name]; !exists {
 			last, ran := s.lastScheduledAt[pkg.Name]

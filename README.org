@@ -46,7 +46,9 @@ Format:
       "name": "pkg",
       // path to the test binary for the package
       "path": "/opt/tester/bin/pkg.test",
-      // test binary options that are supported      
+      // string representing a delay duration between runs
+      "run_delay": "1h30m",
+      // test binary options that are supported
       "options": [
         {
           "name": "test.timeout",

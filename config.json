@@ -3,6 +3,7 @@
     {
       "name": "db",
       "path": "/bin/db.test",
+      "run_delay": "30m",
       "options": [
         {
           "name": "test.timeout",
