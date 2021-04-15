@@ -53,7 +53,7 @@ func TestDuration_UnmarshalJSON(t *testing.T) {
 			jsonInput := fmt.Sprintf(`{"run_delay": "%s"}`, tt.durationString)
 
 			var actual struct {
-				RunDelay RunDelay `json:"run_delay"`
+				RunDelay DurationString `json:"run_delay"`
 			}
 
 			err := json.NewDecoder(strings.NewReader(jsonInput)).Decode(&actual)
