@@ -79,10 +79,19 @@ func (r *Run) Duration() time.Duration {
 	return r.FinishedAt.Sub(r.StartedAt)
 }
 
+// RunDelay handles JSON marshalling and unmarshalling of
+// string formatted durations (e.g. "5m30s")
 type RunDelay struct {
 	time.Duration
 }
 
+// MarshalJSON converts the Duration value to a string
+func (d *RunDelay) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.Duration.String())
+}
+
+// UnmarshalJSON parses the string duration (e.g. "5m30s")
+// and sets the value of b to the resulting time.Duration
 func (d *RunDelay) UnmarshalJSON(b []byte) error {
 	var v interface{}
 	if err := json.Unmarshal(b, &v); err != nil {
@@ -106,7 +115,7 @@ type Package struct {
 	Name      string   `json:"name"`
 	Path      string   `json:"path"`
 	SHA256Sum string   `json:"sha256sum"`
-	RunDelay  RunDelay `json:"run_delay"`
+	RunDelay  RunDelay `json:"run_delay,string"`
 	Options   []Option `json:"options"`
 }
 
