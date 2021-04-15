@@ -551,7 +551,7 @@ func TestGetPackage(t *testing.T) {
 				Name:      "pkg",
 				Path:      "testdata/fake_test_bin",
 				SHA256Sum: "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78",
-				RunDelay:  tester.RunDelay{Duration: 5 * time.Minute},
+				RunDelay:  tester.DurationString{Duration: 5 * time.Minute},
 				Options: []tester.Option{{
 					Name:        "timeout",
 					Description: "timeout",
@@ -620,7 +620,7 @@ func TestDownloadPackage(t *testing.T) {
 				Name:      "pkg",
 				Path:      fakeTestBinPath,
 				SHA256Sum: fakeTestBinSHA256Sum,
-				RunDelay:  tester.RunDelay{Duration: 5},
+				RunDelay:  tester.DurationString{Duration: 5},
 				Options: []tester.Option{{
 					Name:        "timeout",
 					Description: "timeout",

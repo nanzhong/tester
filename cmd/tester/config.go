@@ -9,7 +9,8 @@ type config struct {
 }
 
 type schedulerConfig struct {
-	RunTimeout string `json:"run_timeout"`
+	RunTimeout tester.DurationString `json:"run_timeout"`
+	RunDelay   tester.DurationString `json:"run_delay"`
 }
 
 type slackConfig struct {
