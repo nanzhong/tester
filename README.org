@@ -1,4 +1,12 @@
 * tester
+
+-----
+
+*NOTE*
+I'm no longer working on nanzhong/tester. Instead I've taken the learnings from this project and running it for various use cases and adopted them into a new version of a test orchestration platform. It's still a work-in-progress and does not have feature parity with nanzhong/tester (but also has many new and different features). Feel free to follow along at [[https://github.com/nanzhong/tstr][nanzhong/tstr]].
+
+-----
+
 Convenient tooling for scheduling, running, and reporting on go tests.
 
 [[https://github.com/nanzhong/tester][nanzhong/tester]] is not a testing framework, and it does not impose any patterns on how tests are written. It is a tool that makes it easy to schedule test runs and to collect their results. A common use case for it is to manage a suite of end to end tests, to visualize the test results, and to alert on failures.
